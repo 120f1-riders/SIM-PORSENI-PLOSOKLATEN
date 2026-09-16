@@ -100,14 +100,14 @@ function hashPw(pw) {
 
 function clean(doc) {
   if (!doc) return doc
-  const { _id, password, password_plain, token, ...rest } = doc
+  const { _id, password, password_plain, token, tokens, ...rest } = doc
   return rest
 }
 
 // For super_admin user listing: keep password_plain visible, strip hash/token/_id
 function cleanUserAdmin(doc) {
   if (!doc) return doc
-  const { _id, password, token, ...rest } = doc
+  const { _id, password, token, tokens, ...rest } = doc
   return rest
 }
 
@@ -124,7 +124,9 @@ async function getUser(request) {
   const auth = request.headers.get('authorization') || ''
   const token = auth.startsWith('Bearer ') ? auth.slice(7) : null
   if (!token) return null
-  const u = await db.collection('users').findOne({ token })
+  // Multi-device: a token is valid if it matches the legacy single `token`
+  // field OR is present in the `tokens` array (one account, many devices).
+  const u = await db.collection('users').findOne({ $or: [{ tokens: token }, { token }] })
   return u || null
 }
 
@@ -312,6 +314,7 @@ async function handleRoute(request, { params }) {
       const exists = await db.collection('users').findOne({ email: String(b.email).toLowerCase() })
       if (exists) return json({ error: 'Email sudah terdaftar' }, 400)
       const isSuper = b.role === 'super_admin'
+      const initToken = uuidv4()
       const user = {
         id: uuidv4(),
         name: b.name,
@@ -322,7 +325,8 @@ async function handleRoute(request, { params }) {
         madrasah_name: b.madrasah_name || null,
         assigned_lomba_id: b.assigned_lomba_id || null,
         status: isSuper ? 'verified' : 'pending',
-        token: uuidv4(),
+        token: initToken,
+        tokens: [initToken],
         created_at: new Date(),
       }
       await db.collection('users').insertOne(user)
@@ -338,7 +342,7 @@ async function handleRoute(request, { params }) {
       if (!u || u.password !== hashPw(b.password)) return json({ error: 'Email atau kata sandi salah' }, 401)
       if (u.status !== 'verified') return json({ error: 'Akun Anda masih menunggu verifikasi Super Admin.' }, 403)
       const token = uuidv4()
-      await db.collection('users').updateOne({ id: u.id }, { $set: { token } })
+      await db.collection('users').updateOne({ id: u.id }, { $set: { token }, $addToSet: { tokens: token } })
       return json({ token, user: clean({ ...u, token }) })
     }
 
@@ -352,7 +356,7 @@ async function handleRoute(request, { params }) {
     if (route === '/auth/profile' && method === 'GET') {
       const u = await getUser(request)
       if (!u) return json({ error: 'Tidak terautentikasi' }, 401)
-      const { _id, password, token, ...rest } = u
+      const { _id, password, token, tokens, ...rest } = u
       return json(rest) // includes password_plain, photo_url, assigned_lomba_id
     }
     if (route === '/auth/profile' && method === 'PUT') {
@@ -365,7 +369,7 @@ async function handleRoute(request, { params }) {
       if (b.password) { set.password = hashPw(String(b.password)); set.password_plain = String(b.password) }
       await db.collection('users').updateOne({ id: u.id }, { $set: set })
       const doc = await db.collection('users').findOne({ id: u.id })
-      const { _id, password, token, ...rest } = doc
+      const { _id, password, token, tokens, ...rest } = doc
       return json(rest)
     }
 
@@ -428,6 +432,7 @@ async function handleRoute(request, { params }) {
       const exists = await db.collection('users').findOne({ email })
       if (exists) return json({ error: 'User sudah terdaftar' }, 400)
       const pw = b.password ? String(b.password) : '12345678'
+      const initToken = uuidv4()
       const user = {
         id: uuidv4(), name: b.name, email,
         password: hashPw(pw), password_plain: pw,
@@ -435,7 +440,7 @@ async function handleRoute(request, { params }) {
         madrasah_name: b.madrasah_name || null,
         assigned_lomba_id: b.assigned_lomba_id || null,
         status: 'verified',
-        token: uuidv4(), created_at: new Date(),
+        token: initToken, tokens: [initToken], created_at: new Date(),
       }
       await db.collection('users').insertOne(user)
       return json(cleanUserAdmin(user))
@@ -714,7 +719,7 @@ async function handleRoute(request, { params }) {
       // ensure current super_admin still exists & keeps a valid token
       const meStill = await db.collection('users').findOne({ id: u.id })
       if (meStill) {
-        await db.collection('users').updateOne({ id: u.id }, { $set: { token: u.token, status: 'verified' } })
+        await db.collection('users').updateOne({ id: u.id }, { $set: { token: u.token, status: 'verified' }, $addToSet: { tokens: u.token } })
       } else {
         await db.collection('users').insertOne({ ...u })
       }
