@@ -517,4 +517,3 @@ function Hasil({ lomba, peserta, juara, hasil, onChange }) {
     </div>
   )
 }
-
