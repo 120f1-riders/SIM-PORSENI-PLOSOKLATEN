@@ -5,7 +5,7 @@ import { toast } from 'sonner'
 import {
   Trophy, Users, GraduationCap, Loader2, Plus, Pencil, Trash2, CheckCircle, ShieldCheck,
   Upload, Award, Download, IdCard, Image as ImageIcon, Printer, UsersRound, User,
-  Eye, EyeOff, KeyRound, Copy, FileText, BellRing, Cloud, RefreshCw, FileSpreadsheet, Link2, Unlink, Medal,
+  Eye, EyeOff, KeyRound, Copy, FileText, BellRing, Cloud, RefreshCw, FileSpreadsheet, Link2, Unlink, Medal, School,
 } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -196,6 +196,23 @@ function Dashboard() {
   })
   const klasemen = Object.values(medalMap).sort((a, b) => b.poin - a.poin || b.gold - a.gold || b.silver - a.silver || b.bronze - a.bronze || a.madrasah.localeCompare(b.madrasah))
 
+  // Matriks: Data Pendaftar per Asal Madrasah per Cabang Lomba (kolom lomba + rekap L/P/Total)
+  const lombaCols = [...data.lomba].sort((a, b) => (a.category || '').localeCompare(b.category || '') || (a.name || '').localeCompare(b.name || ''))
+  const lombaIdSet = new Set(lombaCols.map((l) => l.id))
+  const madNameOf = (p) => (p.madrasah_name || '').trim() || '(Tanpa Madrasah)'
+  const madrasahRows = Array.from(new Set(data.peserta.map(madNameOf))).sort((a, b) => a.localeCompare(b))
+  const matrix = madrasahRows.map((mad) => {
+    const arr = data.peserta.filter((p) => madNameOf(p) === mad && lombaIdSet.has(p.lomba_id))
+    const cols = lombaCols.map((l) => arr.filter((p) => p.lomba_id === l.id).length)
+    const L = arr.filter((p) => p.gender === 'L').length
+    const P = arr.filter((p) => p.gender === 'P').length
+    return { madrasah: mad, cols, L, P, total: arr.length }
+  })
+  const colTotals = lombaCols.map((l) => data.peserta.filter((p) => p.lomba_id === l.id).length)
+  const gL = matrix.reduce((s, r) => s + r.L, 0)
+  const gP = matrix.reduce((s, r) => s + r.P, 0)
+  const gTotal = matrix.reduce((s, r) => s + r.total, 0)
+
   return (
     <div>
       <PageHeader title="Dashboard Super Admin" desc="Monitoring keseluruhan Porseni MI Plosoklaten" />
@@ -245,6 +262,49 @@ function Dashboard() {
                   ))}
                 </TableBody>
               </Table>
+            )}
+          </Card>
+
+          <Card className="mt-6">
+            <div className="p-5 border-b flex items-center gap-2">
+              <School className="h-5 w-5 text-primary" />
+              <div>
+                <h3 className="font-semibold">Data Pendaftar per Madrasah per Cabang Lomba</h3>
+                <p className="text-sm text-muted-foreground">Jumlah peserta tiap madrasah pada setiap cabang lomba (L = laki-laki, P = perempuan)</p>
+              </div>
+            </div>
+            {(madrasahRows.length === 0 || lombaCols.length === 0) ? <Empty text="Belum ada data pendaftar." /> : (
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="whitespace-nowrap sticky left-0 bg-background z-10">Asal Madrasah</TableHead>
+                      {lombaCols.map((l) => <TableHead key={l.id} className="text-center whitespace-nowrap">{l.name}</TableHead>)}
+                      <TableHead className="text-center">L</TableHead>
+                      <TableHead className="text-center">P</TableHead>
+                      <TableHead className="text-center">Total</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {matrix.map((r) => (
+                      <TableRow key={r.madrasah}>
+                        <TableCell className="font-medium whitespace-nowrap sticky left-0 bg-background z-10">{r.madrasah}</TableCell>
+                        {r.cols.map((c, idx) => <TableCell key={idx} className="text-center">{c === 0 ? <span className="text-muted-foreground">–</span> : c}</TableCell>)}
+                        <TableCell className="text-center">{r.L}</TableCell>
+                        <TableCell className="text-center">{r.P}</TableCell>
+                        <TableCell className="text-center font-bold text-primary">{r.total}</TableCell>
+                      </TableRow>
+                    ))}
+                    <TableRow className="bg-muted/50 font-semibold">
+                      <TableCell className="whitespace-nowrap sticky left-0 bg-muted/50 z-10">Total</TableCell>
+                      {colTotals.map((c, idx) => <TableCell key={idx} className="text-center">{c}</TableCell>)}
+                      <TableCell className="text-center">{gL}</TableCell>
+                      <TableCell className="text-center">{gP}</TableCell>
+                      <TableCell className="text-center text-primary">{gTotal}</TableCell>
+                    </TableRow>
+                  </TableBody>
+                </Table>
+              </div>
             )}
           </Card>
 
