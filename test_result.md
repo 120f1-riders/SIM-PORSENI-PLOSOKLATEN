@@ -105,6 +105,20 @@
 user_problem_statement: "SIM Porseni MI Kecamatan Plosoklaten - role-based competition management app (Super Admin, Admin Madrasah, Panitia). Next.js + MongoDB. Features: auth+roles, lomba CRUD, participant registration with file upload, verification, print sheets, results/winners, certificate & ID card engine."
 
 backend:
+  - task: "Multi-device login (token array) — one account usable on multiple devices simultaneously"
+    implemented: true
+    working: true
+    file: "app/api/[[...path]]/route.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "CHANGE for multi-device: previously each login OVERWROTE the single user.token, invalidating all other devices. Now users keep a `tokens` array. register + POST /users initialize tokens:[initToken]. login generates a NEW token and does {$set:{token}, $addToSet:{tokens:token}} (does NOT invalidate previous tokens). getUser() now matches {$or:[{tokens:token},{token}]}. clean()/cleanUserAdmin()/profile handlers now also strip `tokens` (must NOT leak). admin/restore also $addToSet the current super_admin token. Verified manually: login twice -> both device tokens valid on /auth/me, no leak. TEST: (1) super_admin login twice (T1 then T2); GET /auth/me with T1 -> 200 (old token STILL valid), with T2 -> 200. (2) Ensure /auth/me, /auth/login, /auth/register, GET /users do NOT leak tokens/token/password/hash. (3) Create panitia via POST /users, login twice, both tokens work. (4) Regression: invalid/no token -> 401. Seed: super@porseni.id/admin123."
+        -working: true
+        -agent: "testing"
+        -comment: "✅ ALL 4 SCENARIOS PASSED - Comprehensive backend testing of multi-device login (token array) feature. SCENARIO 1 (Multi-device core): Super admin login Device 1 (super@porseni.id/admin123) returned token T1, login Device 2 with SAME credentials returned DIFFERENT token T2. 🔍 CRITICAL TEST PASS: GET /auth/me with T1 (old device token) returned HTTP 200 with correct user AFTER Device 2 login (proves old token NOT invalidated - this was the key bug fix). GET /auth/me with T2 also returned 200. Both device tokens valid simultaneously. Login responses do NOT leak sensitive fields in user object. SCENARIO 2 (No sensitive leak): GET /users (super_admin) correctly shows password_plain (for super_admin visibility) but does NOT leak _id/password/token/tokens. GET /auth/me does NOT leak password/password_plain/token/tokens/_id. SCENARIO 3 (New user multi-device): Created individu lomba 'Test Multi-Device Lomba'. POST /users created panitia user with assigned_lomba_id, auto-verified with default password 12345678, response shows password_plain but does NOT leak token/tokens/_id. Panitia login Device 1 returned token Tp1, login Device 2 returned DIFFERENT token Tp2. 🔍 CRITICAL TEST PASS: GET /auth/me with Tp1 (old panitia device token) returned HTTP 200 AFTER Device 2 login (multi-device working for newly created users too). GET /auth/me with Tp2 also returned 200. SCENARIO 4 (Regression): GET /auth/me with NO Authorization header correctly returned 401. GET /auth/me with invalid/random token correctly returned 401. GET /lomba (public, no auth) correctly returned 200 with array. Multi-device login feature working correctly: (1) Each login generates NEW unique token and adds to tokens array via $addToSet (does NOT overwrite/invalidate previous tokens). (2) getUser() matches {$or:[{tokens:token},{token}]} so ALL device tokens remain valid. (3) clean()/cleanUserAdmin() strip both token and tokens fields (no leak). (4) Works for super_admin, panitia, and all roles. NO SENSITIVE DATA LEAKS DETECTED. The key regression (old device tokens being invalidated on new login) is FIXED."
   - task: "Edit biodata peserta (PUT /peserta/:id) — admin_madrasah own-only scoping + super_admin any"
     implemented: true
     working: true
@@ -352,6 +366,39 @@ backend:
         -comment: "✅ ALL 14 TESTS PASSED (12 authorization tests + 2 regression tests). Comprehensive testing of DELETE /peserta/:id authorization scoping: (1) super_admin login successful. (2) Created lomba 'Test Delete Auth' (Olahraga/individu). (3) Created admin_madrasah user 'MI A', login successful. (4) Created admin_madrasah user 'MI B', login successful. (5) MI A created peserta1 (Peserta A, gender L). (6) MI B created peserta2 (Peserta B, gender P). (7) MI A DELETE peserta2 (not own) -> 403 as expected (admin_madrasah can only delete own peserta). (8) MI A DELETE peserta1 (own) -> 200 successful. (9) Verified peserta1 no longer in MI A's GET /peserta list. (10) Created panitia user assigned to lomba, login successful. (11) Panitia DELETE peserta2 -> 403 as expected (panitia cannot delete any peserta). (12) super_admin DELETE peserta2 -> 200 successful (super_admin can delete any peserta). (13) super_admin DELETE nonexistent-id-123 -> 404 as expected. (14) DELETE without Authorization header -> 401 as expected. Regression tests: GET /lomba (public) returns 200 with array, super_admin login returns 200 with no password/password_plain/token/_id leaks. All authorization rules working correctly: super_admin can delete ANY peserta, admin_madrasah can delete ONLY own peserta (created_by check), panitia always forbidden, proper 404 for nonexistent id, proper 401 for missing token."
 
 frontend:
+  - task: "Asal Madrasah filter on Data Pendaftar (Super Admin)"
+    implemented: true
+    working: true
+    file: "components/porseni/SuperAdmin.jsx"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: false
+    status_history:
+        -working: true
+        -agent: "main"
+        -comment: "Added 'Asal Madrasah' dropdown filter (Semua Madrasah + unique madrasah_name options) between Cabang Lomba and Jenis Kelamin filters. Applied to rows filter and print sheet title. Verified via screenshot: filter renders and table shows all madrasah."
+  - task: "Panitia kelompok (Voli/Futsal) grouped-by-Asal-Madrasah accordion"
+    implemented: true
+    working: true
+    file: "components/porseni/Panitia.jsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        -working: true
+        -agent: "main"
+        -comment: "For panitia whose lomba.type==='kelompok' (Voli/Futsal), DaftarPeserta now groups peserta by Asal Madrasah as collapsible cards (madrasah name + peserta count + verified badge shown first; click expands to reveal member names/table). Individu lombas keep the original flat table. Verified via screenshot: MI Al-Hidayah expanded shows Andi/Budi, MI Nurul Huda collapsed."
+  - task: "Super Admin Dashboard medal standings (Perolehan Juara per Asal Madrasah)"
+    implemented: true
+    working: true
+    file: "components/porseni/SuperAdmin.jsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        -working: true
+        -agent: "main"
+        -comment: "Dashboard now loads /juara and shows a medal standings table per Asal Madrasah: Juara 1=Emas(5pt), Juara 2=Perak(3pt), Juara 3=Perunggu(1pt), Harapan=0. Sorted by total poin desc (tie-break gold/silver/bronze/name). Verified via screenshot: MI Nurul Huda 1 Emas+1 Perak=8pt, MI Al-Hidayah 1 Emas=5pt (correct)."
   - task: "Manajemen Pengguna: Cetak/Export Excel (nama, user/email, password_plain, peran, keterangan, status)"
     implemented: true
     working: "NA"
@@ -447,7 +494,7 @@ frontend:
 metadata:
   created_by: "main_agent"
   version: "1.0"
-  test_sequence: 12
+  test_sequence: 13
   run_ui: false
 
 test_plan:
@@ -458,6 +505,11 @@ test_plan:
   run_ui: false
 
 agent_communication:
+    -agent: "main"
+    -message: "NEW FEATURE DELTA (continuation). .env was MISSING on start -> restored (MONGO_URL, DB_NAME=porseni_db, NEXT_PUBLIC_BASE_URL preview, CORS=*) + re-seeded super_admin (super@porseni.id/admin123, only account). Please test ONLY backend, high_first, the task 'Multi-device login (token array)'. Focus: (1) super_admin login TWICE -> get T1 then T2; GET /auth/me with T1 must be 200 (old device token STILL valid after 2nd login), GET /auth/me with T2 must be 200. (2) No leak of `tokens`/`token`/`password`/`password_plain` in /auth/me, /auth/login, /auth/register responses, and GET /users (super_admin) must show password_plain but NOT token/tokens/hash. (3) POST /users creates a panitia (need a lomba first), login that panitia twice -> both tokens valid. (4) Regression: GET /auth/me with no token -> 401, with invalid token -> 401; GET /lomba public -> 200. Do NOT test Google integration endpoints. NOTE: other frontend-only features added this round (Asal Madrasah filter on Data Pendaftar, Panitia kelompok grouped-by-madrasah accordion, Super Admin dashboard medal standings per madrasah) are UI-only and will be tested separately by user."
+
+    -agent: "testing"
+    -message: "✅ MULTI-DEVICE LOGIN BACKEND TESTING COMPLETE - ALL 4 SCENARIOS PASSED. Comprehensive end-to-end testing of token array implementation for simultaneous multi-device login. SCENARIO 1 (Multi-device core - THE KEY TEST): Super admin logged in twice with same credentials (super@porseni.id/admin123), received two DIFFERENT tokens (T1 and T2). 🔍🔍🔍 CRITICAL REGRESSION FIX VERIFIED: GET /auth/me with T1 (Device 1 old token) returned HTTP 200 with correct user data AFTER Device 2 login with T2. This proves the old device token was NOT invalidated by the second login - the key bug is FIXED. GET /auth/me with T2 also returned 200. Both device tokens work simultaneously. No sensitive data leaks in login responses (user object does NOT contain _id/password/password_plain/token/tokens). SCENARIO 2 (No sensitive leak): GET /users (super_admin) correctly returns password_plain (for super_admin visibility) but does NOT leak _id/password/token/tokens. GET /auth/me does NOT leak any sensitive fields. SCENARIO 3 (New user multi-device): Created test lomba (individu). POST /users created panitia user with assigned_lomba_id, auto-verified with default password 12345678. Panitia logged in twice (Tp1, Tp2 - different tokens). 🔍 CRITICAL: GET /auth/me with Tp1 returned 200 AFTER Tp2 login (multi-device working for newly created users). GET /auth/me with Tp2 also returned 200. POST /users response shows password_plain but does NOT leak token/tokens/_id. SCENARIO 4 (Regression): GET /auth/me with NO Authorization header correctly returned 401. GET /auth/me with invalid/random Bearer token correctly returned 401. GET /lomba (public, no auth) correctly returned 200 with array. Implementation verified: (1) Each login generates NEW unique token via uuidv4(). (2) Login does {$set:{token}, $addToSet:{tokens:token}} - adds new token to array WITHOUT removing old tokens. (3) getUser() matches {$or:[{tokens:token},{token}]} - checks both tokens array and legacy token field, so ALL device tokens remain valid. (4) clean() and cleanUserAdmin() strip both 'token' and 'tokens' fields (no leak). (5) Works correctly for super_admin, panitia, admin_madrasah, and all roles. The multi-device login feature is working correctly - one account can now be used on multiple devices simultaneously without invalidating previous device tokens. NO SENSITIVE DATA LEAKS DETECTED. Ready for main agent to summarize and finish."
     -agent: "main"
     -message: "BUG FIX DELTA to test (backend only, high_first). .env was MISSING on continuation start -> restored (MONGO_URL=mongodb://localhost:27017, DB_NAME=porseni_db, NEXT_PUBLIC_BASE_URL preview, CORS=*). DB was empty -> re-seeded super_admin (super@porseni.id/admin123, only account). Task to test: 'Panitia GET /peserta requires status=verified'. The panitia GET /peserta filter is now {lomba_id, complete:true, status:'verified'}. Steps: (1) super_admin login; POST /lomba (individu) -> lombaX; POST /users create a panitia assigned_lomba_id=lombaX (default pw 12345678), and an admin_madrasah (default pw 12345678). (2) As admin_madrasah, POST /peserta in lombaX WITH all 5 files (akte,surat_ket,pas_photo,nisn_doc,raport) so complete=true; status defaults 'pending'. (3) panitia login; GET /peserta -> should be EMPTY array (peserta is complete but NOT verified). (4) super_admin PUT /peserta/:id/status {status:'verified'}. (5) panitia GET /peserta -> should now contain that 1 peserta. (6) Regression: admin_madrasah GET /peserta still returns own peserta regardless of verify; super_admin GET /peserta returns all. Do NOT test Google integration endpoints."
 
