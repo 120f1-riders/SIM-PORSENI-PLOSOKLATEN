@@ -5,7 +5,7 @@ import { toast } from 'sonner'
 import {
   Trophy, Users, GraduationCap, Loader2, Plus, Pencil, Trash2, CheckCircle, ShieldCheck,
   Upload, Award, Download, IdCard, Image as ImageIcon, Printer, UsersRound, User,
-  Eye, EyeOff, KeyRound, Copy, FileText, BellRing, Cloud, RefreshCw, FileSpreadsheet, Link2, Unlink,
+  Eye, EyeOff, KeyRound, Copy, FileText, BellRing, Cloud, RefreshCw, FileSpreadsheet, Link2, Unlink, Medal,
 } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -164,13 +164,13 @@ function IntegrasiGoogle() {
 
 /* ---------------- DASHBOARD ---------------- */
 function Dashboard() {
-  const [data, setData] = useState({ lomba: [], users: [], peserta: [] })
+  const [data, setData] = useState({ lomba: [], users: [], peserta: [], juara: [] })
   const [loading, setLoading] = useState(true)
   useEffect(() => {
     (async () => {
       try {
-        const [lomba, users, peserta] = await Promise.all([api('/lomba'), api('/users'), api('/peserta')])
-        setData({ lomba, users, peserta })
+        const [lomba, users, peserta, juara] = await Promise.all([api('/lomba'), api('/users'), api('/peserta'), api('/juara').catch(() => [])])
+        setData({ lomba, users, peserta, juara: juara || [] })
       } catch (e) { toast.error(e.message) } finally { setLoading(false) }
     })()
   }, [])
@@ -181,6 +181,21 @@ function Dashboard() {
     const ps = data.peserta.filter((p) => p.lomba_id === l.id)
     return { ...l, total: ps.length, L: ps.filter((p) => p.gender === 'L').length, P: ps.filter((p) => p.gender === 'P').length }
   }).sort((a, b) => b.total - a.total)
+
+  // Klasemen perolehan medali per Asal Madrasah
+  // Juara 1 = Emas (5 poin), Juara 2 = Perak (3 poin), Juara 3 = Perunggu (1 poin). Harapan = 0.
+  const RANK_MEDAL = { 'Juara 1': { key: 'gold', poin: 5 }, 'Juara 2': { key: 'silver', poin: 3 }, 'Juara 3': { key: 'bronze', poin: 1 } }
+  const medalMap = {}
+  data.juara.forEach((j) => {
+    const m = RANK_MEDAL[j.rank]
+    if (!m) return
+    const nama = (j.madrasah_name || '').trim() || '(Tanpa Madrasah)'
+    if (!medalMap[nama]) medalMap[nama] = { madrasah: nama, gold: 0, silver: 0, bronze: 0, poin: 0 }
+    medalMap[nama][m.key] += 1
+    medalMap[nama].poin += m.poin
+  })
+  const klasemen = Object.values(medalMap).sort((a, b) => b.poin - a.poin || b.gold - a.gold || b.silver - a.silver || b.bronze - a.bronze || a.madrasah.localeCompare(b.madrasah))
+
   return (
     <div>
       <PageHeader title="Dashboard Super Admin" desc="Monitoring keseluruhan Porseni MI Plosoklaten" />
@@ -196,6 +211,43 @@ function Dashboard() {
             <StatCard icon={User} label="Peserta Laki-laki" value={totalL} />
             <StatCard icon={UsersRound} label="Peserta Perempuan" value={totalP} />
           </div>
+
+          <Card className="mt-6">
+            <div className="p-5 border-b flex items-center gap-2">
+              <Medal className="h-5 w-5 text-amber-500" />
+              <div>
+                <h3 className="font-semibold">Perolehan Juara per Asal Madrasah</h3>
+                <p className="text-sm text-muted-foreground">🥇 Emas (Juara 1) = 5 poin · 🥈 Perak (Juara 2) = 3 poin · 🥉 Perunggu (Juara 3) = 1 poin</p>
+              </div>
+            </div>
+            {klasemen.length === 0 ? <Empty text="Belum ada perolehan juara. Klasemen tampil setelah Panitia menetapkan juara." /> : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-14 text-center">Peringkat</TableHead>
+                    <TableHead>Asal Madrasah</TableHead>
+                    <TableHead className="text-center">🥇 Emas</TableHead>
+                    <TableHead className="text-center">🥈 Perak</TableHead>
+                    <TableHead className="text-center">🥉 Perunggu</TableHead>
+                    <TableHead className="text-center">Total Poin</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {klasemen.map((k, i) => (
+                    <TableRow key={k.madrasah} className={i === 0 ? 'bg-amber-50' : ''}>
+                      <TableCell className="text-center font-semibold">{i + 1}</TableCell>
+                      <TableCell className="font-medium">{k.madrasah}</TableCell>
+                      <TableCell className="text-center">{k.gold}</TableCell>
+                      <TableCell className="text-center">{k.silver}</TableCell>
+                      <TableCell className="text-center">{k.bronze}</TableCell>
+                      <TableCell className="text-center font-bold text-primary">{k.poin}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </Card>
+
           <Card className="mt-6">
             <div className="p-5 border-b">
               <h3 className="font-semibold">Rekap Pendaftar per Cabang Lomba</h3>
@@ -785,6 +837,7 @@ function DataPendaftar() {
   const [loading, setLoading] = useState(true)
   const [lombaFilter, setLombaFilter] = useState('all')
   const [genderFilter, setGenderFilter] = useState('all')
+  const [madrasahFilter, setMadrasahFilter] = useState('all')
   const [kopSurat, setKopSurat] = useState(null)
   const [editDlg, setEditDlg] = useState({ open: false, peserta: null })
 
@@ -810,6 +863,9 @@ function DataPendaftar() {
   const rows = peserta
     .filter((p) => lombaFilter === 'all' ? true : p.lomba_id === lombaFilter)
     .filter((p) => genderFilter === 'all' ? true : p.gender === genderFilter)
+    .filter((p) => madrasahFilter === 'all' ? true : (p.madrasah_name || '') === madrasahFilter)
+
+  const madrasahOptions = Array.from(new Set(peserta.map((p) => (p.madrasah_name || '').trim()).filter(Boolean))).sort((a, b) => a.localeCompare(b))
 
   const doPrint = () => setTimeout(() => window.print(), 150)
   const photoCell = (p) => {
@@ -830,7 +886,7 @@ function DataPendaftar() {
               <div style={{ fontSize: 16, fontWeight: 700 }}>MADRASAH IBTIDAIYYAH KECAMATAN PLOSOKLATEN</div>
             </div>
           )}
-        <div style={{ textAlign: 'center', fontSize: 14, marginTop: 4, fontWeight: 600 }}>DAFTAR SELURUH PESERTA{lombaFilter !== 'all' ? ' — ' + (lomba.find((l) => l.id === lombaFilter)?.name || '') : ''}</div>
+        <div style={{ textAlign: 'center', fontSize: 14, marginTop: 4, fontWeight: 600 }}>DAFTAR SELURUH PESERTA{lombaFilter !== 'all' ? ' — ' + (lomba.find((l) => l.id === lombaFilter)?.name || '') : ''}{madrasahFilter !== 'all' ? ' — ' + madrasahFilter : ''}</div>
       </div>
       <table className="print-table">
         <thead><tr><th>No</th><th>No. Peserta</th><th style={{ width: 60 }}>Foto</th><th>Nama</th><th>L/P</th><th>Tempat, Tgl Lahir</th><th>Asal Madrasah</th><th>Cabang Lomba</th><th>Status</th></tr></thead>
@@ -869,6 +925,16 @@ function DataPendaftar() {
               <SelectContent>
                 <SelectItem value="all">Semua Lomba</SelectItem>
                 {lomba.map((l) => <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-muted-foreground">Asal Madrasah:</span>
+            <Select value={madrasahFilter} onValueChange={setMadrasahFilter}>
+              <SelectTrigger className="w-56"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Semua Madrasah</SelectItem>
+                {madrasahOptions.map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
