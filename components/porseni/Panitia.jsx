@@ -72,85 +72,178 @@ function NomorCell({ p, onSave }) {
   )
 }
 
+function TeamNomorCell({ members, onSave }) {
+  const nums = (members || []).map((m) => Number(m.nomor_peserta) || 9999)
+  const min = nums.length ? Math.min(...nums) : 9999
+  const initial = min === 9999 ? '' : String(min)
+  const [val, setVal] = useState(initial)
+  useEffect(() => { setVal(initial) }, [initial])
+  const commit = () => { const v = String(val).trim(); if (v && v !== initial) onSave(members, v) }
+  return (
+    <input
+      className="w-16 border rounded px-2 py-1 text-sm font-mono focus:ring-2 focus:ring-primary focus:outline-none"
+      value={val}
+      onClick={(e) => e.stopPropagation()}
+      onChange={(e) => setVal(e.target.value)}
+      onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur() }}
+      onBlur={commit}
+      title="Nomor urut tampil untuk tim/madrasah ini (berlaku ke semua anggota)"
+    />
+  )
+}
+
 function DaftarPeserta({ lomba, peserta, loading, onChange }) {
   const [expanded, setExpanded] = useState({})
+  const [gender, setGender] = useState('all')
   const setNomor = async (id, nomor_peserta) => {
     try { await api(`/peserta/${id}`, { method: 'PUT', body: { nomor_peserta } }); toast.success('Nomor urut tampil diperbarui'); onChange() }
     catch (e) { toast.error(e.message) }
   }
   const sortPeserta = (arr) => [...(arr || [])].sort((a, b) => (Number(a.nomor_peserta) || 0) - (Number(b.nomor_peserta) || 0) || String(a.nomor_peserta).localeCompare(String(b.nomor_peserta)))
-  const sorted = sortPeserta(peserta)
+  const filteredPeserta = (peserta || []).filter((p) => gender === 'all' ? true : (p.gender || '') === gender)
+  const sorted = sortPeserta(filteredPeserta)
   const isGroup = lomba?.type === 'kelompok'
 
-  // Kelompok (Voli/Futsal): tampilkan Asal Madrasah dulu, klik untuk lihat nama peserta
-  if (isGroup) {
-    const groupsMap = {}
-    sorted.forEach((p) => {
-      const key = (p.madrasah_name || '').trim() || '(Tanpa Madrasah)'
-      if (!groupsMap[key]) groupsMap[key] = []
-      groupsMap[key].push(p)
+  const GenderFilter = (
+    <div className="flex items-center gap-2 mb-3">
+      <span className="text-sm text-muted-foreground">Jenis Kelamin:</span>
+      <Select value={gender} onValueChange={setGender}>
+        <SelectTrigger className="w-48"><SelectValue /></SelectTrigger>
+        <SelectContent>
+          <SelectItem value="all">Semua</SelectItem>
+          <SelectItem value="L">Laki-laki (L)</SelectItem>
+          <SelectItem value="P">Perempuan (P)</SelectItem>
+        </SelectContent>
+      </Select>
+    </div>
+  )
+
+  const toggle = (k) => setExpanded((s) => ({ ...s, [k]: !s[k] }))
+  const setTeamNomor = async (members, nomor_peserta) => {
+    try {
+      await Promise.all((members || []).map((m) => api(`/peserta/${m.id}`, { method: 'PUT', body: { nomor_peserta } })))
+      toast.success('Nomor urut tim diperbarui'); onChange()
+    } catch (e) { toast.error(e.message) }
+  }
+  const teamNo = (members) => { const n = (members || []).map((m) => Number(m.nomor_peserta) || 9999); return n.length ? Math.min(...n) : 9999 }
+  const buildMadGroups = (members) => {
+    const map = {}
+    ;(members || []).forEach((p) => {
+      const k = (p.madrasah_name || '').trim() || '(Tanpa Madrasah)'
+      if (!map[k]) map[k] = []
+      map[k].push(p)
     })
-    const groups = Object.keys(groupsMap).sort((a, b) => a.localeCompare(b)).map((k) => ({ madrasah: k, members: groupsMap[k] }))
-    const toggle = (m) => setExpanded((s) => ({ ...s, [m]: !s[m] }))
+    return Object.keys(map)
+      .map((k) => ({ madrasah: k, members: sortPeserta(map[k]) }))
+      .sort((a, b) => teamNo(a.members) - teamNo(b.members) || a.madrasah.localeCompare(b.madrasah))
+  }
+  const renderMadrasahCard = (g, keyId) => {
+    const open = !!expanded[keyId]
+    const verifiedCount = g.members.filter((m) => m.status === 'verified').length
+    return (
+      <Card key={keyId} className="overflow-hidden">
+        <div className="w-full flex items-center gap-3 p-4">
+          <button type="button" onClick={() => toggle(keyId)} className="flex items-center gap-3 flex-1 text-left hover:opacity-80">
+            {open ? <ChevronDown className="h-5 w-5 text-primary shrink-0" /> : <ChevronRight className="h-5 w-5 text-muted-foreground shrink-0" />}
+            <School className="h-5 w-5 text-primary shrink-0" />
+            <span className="font-semibold">{g.madrasah}</span>
+          </button>
+          <div className="flex items-center gap-2 shrink-0">
+            <span className="text-xs text-muted-foreground">No. Urut:</span>
+            <TeamNomorCell members={g.members} onSave={setTeamNomor} />
+          </div>
+          <span className="text-sm text-muted-foreground shrink-0">{g.members.length} peserta</span>
+          <span className="text-xs px-2 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 shrink-0">{verifiedCount} terverifikasi</span>
+        </div>
+        {open && (
+          <div className="border-t">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>No</TableHead>
+                  <TableHead>Nama</TableHead>
+                  <TableHead>L/P</TableHead>
+                  <TableHead>Tempat, Tgl Lahir</TableHead>
+                  <TableHead>Berkas</TableHead>
+                  <TableHead>Status</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {g.members.map((p, i) => (
+                  <TableRow key={p.id}>
+                    <TableCell className="text-muted-foreground">{i + 1}</TableCell>
+                    <TableCell className="font-medium">{p.participant_name}</TableCell>
+                    <TableCell>{p.gender || '-'}</TableCell>
+                    <TableCell className="text-sm text-muted-foreground">{p.ttl || '-'}</TableCell>
+                    <TableCell>
+                      <div className="flex gap-1 flex-wrap">
+                        {Object.entries(p.files || {}).map(([k, v]) => (
+                          <a key={k} href={fileUrl(v.id)} target="_blank" rel="noreferrer" className="text-xs text-primary underline">{k}</a>
+                        ))}
+                      </div>
+                    </TableCell>
+                    <TableCell><StatusBadge status={p.status} /></TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        )}
+      </Card>
+    )
+  }
+
+  // Kelompok (Voli/Futsal): tampilkan Asal Madrasah + nomor urut per tim
+  if (isGroup) {
+    const genderSet = Array.from(new Set((peserta || []).map((p) => (p.gender || '').trim()).filter(Boolean)))
+    const isVoli = genderSet.length > 1
+    if (isVoli) {
+      const genderOrder = ['L', 'P'].filter((gd) => genderSet.includes(gd))
+      const shownGenders = genderOrder.filter((gd) => gender === 'all' || gender === gd)
+      return (
+        <div>
+          <PageHeader title="Daftar Peserta" desc={lomba ? `${lomba.name} — pilih Laki-laki/Perempuan, lalu klik nama madrasah untuk melihat daftar pesertanya.` : ''} />
+          {GenderFilter}
+          {loading ? <Card><div className="p-8"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div></Card>
+            : shownGenders.length === 0 ? <Card><Empty /></Card> : (
+              <div className="space-y-3">
+                {shownGenders.map((gd) => {
+                  const gkey = `gender:${gd}`
+                  const gopen = !!expanded[gkey]
+                  const membersOfGender = filteredPeserta.filter((p) => (p.gender || '') === gd)
+                  const madGroups = buildMadGroups(membersOfGender)
+                  const label = gd === 'L' ? 'Laki-laki (Putra)' : 'Perempuan (Putri)'
+                  return (
+                    <Card key={gkey} className="overflow-hidden">
+                      <button type="button" onClick={() => toggle(gkey)} className="w-full flex items-center gap-3 p-4 text-left hover:bg-accent/60 transition-colors">
+                        {gopen ? <ChevronDown className="h-5 w-5 text-primary shrink-0" /> : <ChevronRight className="h-5 w-5 text-muted-foreground shrink-0" />}
+                        <Users className="h-5 w-5 text-primary shrink-0" />
+                        <span className="font-semibold flex-1">{label}</span>
+                        <span className="text-sm text-muted-foreground">{madGroups.length} madrasah</span>
+                        <span className="text-xs px-2 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">{membersOfGender.length} peserta</span>
+                      </button>
+                      {gopen && (
+                        <div className="border-t p-3 space-y-3 bg-muted/30">
+                          {madGroups.length === 0 ? <Empty /> : madGroups.map((g) => renderMadrasahCard(g, `mad:${gd}:${g.madrasah}`))}
+                        </div>
+                      )}
+                    </Card>
+                  )
+                })}
+              </div>
+            )}
+        </div>
+      )
+    }
+    const madGroups = buildMadGroups(filteredPeserta)
     return (
       <div>
-        <PageHeader title="Daftar Peserta" desc={lomba ? `${lomba.name} — dikelompokkan per Asal Madrasah. Klik nama madrasah untuk melihat daftar pesertanya.` : ''} />
+        <PageHeader title="Daftar Peserta" desc={lomba ? `${lomba.name} — dikelompokkan per Asal Madrasah. Isi No. Urut pada tiap madrasah untuk mengatur urutan tampil.` : ''} />
+        {GenderFilter}
         {loading ? <Card><div className="p-8"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div></Card>
-          : groups.length === 0 ? <Card><Empty /></Card> : (
+          : madGroups.length === 0 ? <Card><Empty /></Card> : (
             <div className="space-y-3">
-              {groups.map((g) => {
-                const open = !!expanded[g.madrasah]
-                const verifiedCount = g.members.filter((m) => m.status === 'verified').length
-                return (
-                  <Card key={g.madrasah} className="overflow-hidden">
-                    <button
-                      type="button"
-                      onClick={() => toggle(g.madrasah)}
-                      className="w-full flex items-center gap-3 p-4 text-left hover:bg-accent/60 transition-colors"
-                    >
-                      {open ? <ChevronDown className="h-5 w-5 text-primary shrink-0" /> : <ChevronRight className="h-5 w-5 text-muted-foreground shrink-0" />}
-                      <School className="h-5 w-5 text-primary shrink-0" />
-                      <span className="font-semibold flex-1">{g.madrasah}</span>
-                      <span className="text-sm text-muted-foreground">{g.members.length} peserta</span>
-                      <span className="text-xs px-2 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">{verifiedCount} terverifikasi</span>
-                    </button>
-                    {open && (
-                      <div className="border-t">
-                        <Table>
-                          <TableHeader>
-                            <TableRow>
-                              <TableHead>No. Urut Tampil</TableHead>
-                              <TableHead>Nama</TableHead>
-                              <TableHead>L/P</TableHead>
-                              <TableHead>Tempat, Tgl Lahir</TableHead>
-                              <TableHead>Berkas</TableHead>
-                              <TableHead>Status</TableHead>
-                            </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                            {g.members.map((p) => (
-                              <TableRow key={p.id}>
-                                <TableCell><NomorCell p={p} onSave={setNomor} /></TableCell>
-                                <TableCell className="font-medium">{p.participant_name}</TableCell>
-                                <TableCell>{p.gender || '-'}</TableCell>
-                                <TableCell className="text-sm text-muted-foreground">{p.ttl || '-'}</TableCell>
-                                <TableCell>
-                                  <div className="flex gap-1 flex-wrap">
-                                    {Object.entries(p.files || {}).map(([k, v]) => (
-                                      <a key={k} href={fileUrl(v.id)} target="_blank" rel="noreferrer" className="text-xs text-primary underline">{k}</a>
-                                    ))}
-                                  </div>
-                                </TableCell>
-                                <TableCell><StatusBadge status={p.status} /></TableCell>
-                              </TableRow>
-                            ))}
-                          </TableBody>
-                        </Table>
-                      </div>
-                    )}
-                  </Card>
-                )
-              })}
+              {madGroups.map((g) => renderMadrasahCard(g, `mad:${g.madrasah}`))}
             </div>
           )}
       </div>
@@ -160,6 +253,7 @@ function DaftarPeserta({ lomba, peserta, loading, onChange }) {
   return (
     <div>
       <PageHeader title="Daftar Peserta" desc={lomba ? `${lomba.name} — isi kolom No. Urut Tampil untuk mengatur urutan cetak (verifikasi peserta oleh Super Admin)` : ''} />
+      {GenderFilter}
       <Card>
         {loading ? <div className="p-8"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div> : sorted.length === 0 ? <Empty /> : (
           <Table>
@@ -423,3 +517,4 @@ function Hasil({ lomba, peserta, juara, hasil, onChange }) {
     </div>
   )
 }
+
