@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
-import { Users, CheckCircle2, Clock, Loader2, Printer, Upload, Award, FileText, Trash2 } from 'lucide-react'
+import { Users, CheckCircle2, Clock, Loader2, Printer, Upload, Award, FileText, Trash2, ChevronDown, ChevronRight, School } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -73,11 +73,90 @@ function NomorCell({ p, onSave }) {
 }
 
 function DaftarPeserta({ lomba, peserta, loading, onChange }) {
+  const [expanded, setExpanded] = useState({})
   const setNomor = async (id, nomor_peserta) => {
     try { await api(`/peserta/${id}`, { method: 'PUT', body: { nomor_peserta } }); toast.success('Nomor urut tampil diperbarui'); onChange() }
     catch (e) { toast.error(e.message) }
   }
-  const sorted = [...(peserta || [])].sort((a, b) => (Number(a.nomor_peserta) || 0) - (Number(b.nomor_peserta) || 0) || String(a.nomor_peserta).localeCompare(String(b.nomor_peserta)))
+  const sortPeserta = (arr) => [...(arr || [])].sort((a, b) => (Number(a.nomor_peserta) || 0) - (Number(b.nomor_peserta) || 0) || String(a.nomor_peserta).localeCompare(String(b.nomor_peserta)))
+  const sorted = sortPeserta(peserta)
+  const isGroup = lomba?.type === 'kelompok'
+
+  // Kelompok (Voli/Futsal): tampilkan Asal Madrasah dulu, klik untuk lihat nama peserta
+  if (isGroup) {
+    const groupsMap = {}
+    sorted.forEach((p) => {
+      const key = (p.madrasah_name || '').trim() || '(Tanpa Madrasah)'
+      if (!groupsMap[key]) groupsMap[key] = []
+      groupsMap[key].push(p)
+    })
+    const groups = Object.keys(groupsMap).sort((a, b) => a.localeCompare(b)).map((k) => ({ madrasah: k, members: groupsMap[k] }))
+    const toggle = (m) => setExpanded((s) => ({ ...s, [m]: !s[m] }))
+    return (
+      <div>
+        <PageHeader title="Daftar Peserta" desc={lomba ? `${lomba.name} — dikelompokkan per Asal Madrasah. Klik nama madrasah untuk melihat daftar pesertanya.` : ''} />
+        {loading ? <Card><div className="p-8"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div></Card>
+          : groups.length === 0 ? <Card><Empty /></Card> : (
+            <div className="space-y-3">
+              {groups.map((g) => {
+                const open = !!expanded[g.madrasah]
+                const verifiedCount = g.members.filter((m) => m.status === 'verified').length
+                return (
+                  <Card key={g.madrasah} className="overflow-hidden">
+                    <button
+                      type="button"
+                      onClick={() => toggle(g.madrasah)}
+                      className="w-full flex items-center gap-3 p-4 text-left hover:bg-accent/60 transition-colors"
+                    >
+                      {open ? <ChevronDown className="h-5 w-5 text-primary shrink-0" /> : <ChevronRight className="h-5 w-5 text-muted-foreground shrink-0" />}
+                      <School className="h-5 w-5 text-primary shrink-0" />
+                      <span className="font-semibold flex-1">{g.madrasah}</span>
+                      <span className="text-sm text-muted-foreground">{g.members.length} peserta</span>
+                      <span className="text-xs px-2 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">{verifiedCount} terverifikasi</span>
+                    </button>
+                    {open && (
+                      <div className="border-t">
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>No. Urut Tampil</TableHead>
+                              <TableHead>Nama</TableHead>
+                              <TableHead>L/P</TableHead>
+                              <TableHead>Tempat, Tgl Lahir</TableHead>
+                              <TableHead>Berkas</TableHead>
+                              <TableHead>Status</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {g.members.map((p) => (
+                              <TableRow key={p.id}>
+                                <TableCell><NomorCell p={p} onSave={setNomor} /></TableCell>
+                                <TableCell className="font-medium">{p.participant_name}</TableCell>
+                                <TableCell>{p.gender || '-'}</TableCell>
+                                <TableCell className="text-sm text-muted-foreground">{p.ttl || '-'}</TableCell>
+                                <TableCell>
+                                  <div className="flex gap-1 flex-wrap">
+                                    {Object.entries(p.files || {}).map(([k, v]) => (
+                                      <a key={k} href={fileUrl(v.id)} target="_blank" rel="noreferrer" className="text-xs text-primary underline">{k}</a>
+                                    ))}
+                                  </div>
+                                </TableCell>
+                                <TableCell><StatusBadge status={p.status} /></TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    )}
+                  </Card>
+                )
+              })}
+            </div>
+          )}
+      </div>
+    )
+  }
+
   return (
     <div>
       <PageHeader title="Daftar Peserta" desc={lomba ? `${lomba.name} — isi kolom No. Urut Tampil untuk mengatur urutan cetak (verifikasi peserta oleh Super Admin)` : ''} />
