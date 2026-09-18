@@ -70,6 +70,19 @@ export default function OverlayEditor({ templateSrc, fields, onChange, sampleVal
   const update = (i, patch) => onChange(fields.map((f, j) => (j === i ? { ...f, ...patch } : f)))
   const clampNum = (v, min, max) => { const n = parseFloat(v); if (isNaN(n)) return min; return Math.min(max, Math.max(min, Math.round(n * 10) / 10)) }
 
+  // Tambah elemen teks baru (teks bebas / kustom) yang bisa diketik sendiri
+  const addText = () => {
+    const key = 'custom_' + Date.now().toString(36)
+    const nf = { key, custom: true, label: 'Teks Baru', x: 50, y: 50, size: 0.03, color: '#111827', align: 'center', bold: false, font: 'Georgia, serif', maxWidth: 0 }
+    onChange([...fields, nf])
+    setSel(fields.length)
+  }
+  const removeField = (i) => {
+    const nf = fields.filter((_, j) => j !== i)
+    onChange(nf)
+    setSel(Math.max(0, Math.min(i, nf.length - 1)))
+  }
+
   const onMove = (e) => {
     if (dragIdx < 0 || !ref.current) return
     const rect = ref.current.getBoundingClientRect()
@@ -117,14 +130,20 @@ export default function OverlayEditor({ templateSrc, fields, onChange, sampleVal
       </div>
 
       <div className="space-y-3">
-        <div className="flex flex-wrap gap-1">
+        <div className="flex flex-wrap gap-1 items-center">
           {fields.map((f, i) => (
-            <button key={i} onClick={() => setSel(i)} className={`text-xs px-2 py-1 rounded border ${sel === i ? 'bg-primary text-primary-foreground border-primary' : 'bg-background'}`}>{f.key}</button>
+            <button key={i} onClick={() => setSel(i)} className={`text-xs px-2 py-1 rounded border ${sel === i ? 'bg-primary text-primary-foreground border-primary' : 'bg-background'}`}>{f.custom ? (f.label || 'Teks') : f.key}</button>
           ))}
+          <button onClick={addText} className="text-xs px-2 py-1 rounded border border-dashed border-primary text-primary hover:bg-primary/10">+ Tambah Teks</button>
         </div>
         {s && (
           <div className="border rounded-lg p-3 space-y-3">
-            <div className="text-sm font-semibold">{s.type === 'photo' ? 'Kotak Foto' : 'Teks'}: {s.key}</div>
+            <div className="flex items-center justify-between gap-2">
+              <div className="text-sm font-semibold">{s.type === 'photo' ? 'Kotak Foto' : (s.custom ? 'Teks Kustom' : 'Teks')}: {s.custom ? (s.label || 'Teks') : s.key}</div>
+              {s.custom && (
+                <button onClick={() => removeField(sel)} className="text-xs px-2 py-1 rounded border border-red-300 text-red-600 hover:bg-red-50">Hapus</button>
+              )}
+            </div>
             {s.type === 'photo' ? (
               <>
                 <div><Label className="text-xs">Lebar ({s.w || 22}%)</Label><Slider min={5} max={60} step={1} value={[s.w || 22]} onValueChange={([v]) => update(sel, { w: v })} /></div>
@@ -132,7 +151,7 @@ export default function OverlayEditor({ templateSrc, fields, onChange, sampleVal
               </>
             ) : (
               <>
-                {!s.key.match(/name|rank|role|lomba|madrasah|nomor|gender/) && (
+                {(s.custom || !s.key.match(/name|rank|role|lomba|madrasah|nomor|gender/)) && (
                   <div><Label className="text-xs">Teks</Label><Input value={s.label || ''} onChange={(e) => update(sel, { label: e.target.value })} /></div>
                 )}
                 <div>

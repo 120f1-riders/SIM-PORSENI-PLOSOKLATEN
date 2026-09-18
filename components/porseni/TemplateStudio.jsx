@@ -12,16 +12,17 @@ import { renderOverlay, downloadDataUrl } from '@/lib/porseni/canvasgen'
 
 // Aktifkan Auto-Kecil + posisi-otomatis untuk template lama yang belum punya properti ini
 function withAutoFitDefaults(arr, type) {
-  const isIdcard = String(type || '').startsWith('idcard')
+  const t = String(type || '')
+  const flowType = t.startsWith('idcard') || t.startsWith('certificate')
   return (arr || []).map((f) => {
     let nf = f
     const isName = f.key === 'participant_name' || f.key === 'name'
     if (isName && f.autoFit === undefined) {
       nf = { ...nf, autoFit: true, maxLines: f.maxLines || 2, maxWidth: f.maxWidth || 55 }
     }
-    // ID Card peserta: nama madrasah otomatis mengalir sedikit di bawah nama peserta (naik saat nama pendek)
-    if (isIdcard && f.key === 'madrasah_name' && f.flowBelow === undefined) {
-      nf = { ...nf, flowBelow: 'participant_name', flowGap: f.flowGap != null ? f.flowGap : 2 }
+    // ID Card / Sertifikat: nama madrasah otomatis mengalir sedikit di bawah nama peserta (naik saat nama pendek)
+    if (flowType && f.key === 'madrasah_name' && f.flowBelow === undefined) {
+      nf = { ...nf, flowBelow: 'participant_name', flowGap: f.flowGap != null ? f.flowGap : (t.startsWith('idcard') ? 2 : 3) }
     }
     return nf
   })
