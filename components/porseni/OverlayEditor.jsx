@@ -20,6 +20,7 @@ export default function OverlayEditor({ templateSrc, fields, onChange, sampleVal
   }, [templateSrc])
 
   const update = (i, patch) => onChange(fields.map((f, j) => (j === i ? { ...f, ...patch } : f)))
+  const clampNum = (v, min, max) => { const n = parseFloat(v); if (isNaN(n)) return min; return Math.min(max, Math.max(min, Math.round(n * 10) / 10)) }
 
   const onMove = (e) => {
     if (dragIdx < 0 || !ref.current) return
@@ -57,8 +58,8 @@ export default function OverlayEditor({ templateSrc, fields, onChange, sampleVal
               <div
                 key={i}
                 onPointerDown={() => { setDragIdx(i); setSel(i) }}
-                style={{ left: f.x + '%', top: f.y + '%', transform: 'translate(-50%,-50%)', color: f.color, fontFamily: f.font, fontWeight: f.bold ? 700 : 400, fontSize: (f.size * cw) + 'px' }}
-                className={`absolute whitespace-nowrap cursor-move px-1 leading-none ${sel === i ? 'ring-2 ring-primary rounded' : ''}`}
+                style={{ left: f.x + '%', top: f.y + '%', transform: 'translate(-50%,-50%)', color: f.color, fontFamily: f.font, fontWeight: f.bold ? 700 : 400, fontSize: (f.size * cw) + 'px', maxWidth: f.maxWidth ? (f.maxWidth + '%') : 'none', whiteSpace: f.maxWidth ? 'pre-line' : 'pre', textAlign: f.align || 'center' }}
+                className={`absolute cursor-move px-1 leading-tight ${sel === i ? 'ring-2 ring-primary rounded' : ''}`}
               >{sampleValues[f.key] != null ? sampleValues[f.key] : f.label}</div>
             )
           })}
@@ -82,10 +83,24 @@ export default function OverlayEditor({ templateSrc, fields, onChange, sampleVal
               </>
             ) : (
               <>
-                {!s.key.match(/name|rank|role|lomba|madrasah|nomor/) && (
+                {!s.key.match(/name|rank|role|lomba|madrasah|nomor|gender/) && (
                   <div><Label className="text-xs">Teks</Label><Input value={s.label || ''} onChange={(e) => update(sel, { label: e.target.value })} /></div>
                 )}
-                <div><Label className="text-xs">Ukuran ({Math.round(s.size * 1000)})</Label><Slider min={15} max={90} step={1} value={[Math.round(s.size * 1000)]} onValueChange={([v]) => update(sel, { size: v / 1000 })} /></div>
+                <div>
+                  <Label className="text-xs">Ukuran ({Math.round(s.size * 1000)})</Label>
+                  <div className="flex items-center gap-2">
+                    <Slider className="flex-1" min={15} max={90} step={1} value={[Math.round(s.size * 1000)]} onValueChange={([v]) => update(sel, { size: v / 1000 })} />
+                    <Input type="number" min={5} max={200} value={Math.round(s.size * 1000)} onChange={(e) => update(sel, { size: clampNum(e.target.value, 5, 200) / 1000 })} className="h-8 w-16 text-xs" />
+                  </div>
+                </div>
+                <div>
+                  <Label className="text-xs">Lebar Maks Baris ({s.maxWidth || 0}%) — 0 = tanpa batas</Label>
+                  <div className="flex items-center gap-2">
+                    <Slider className="flex-1" min={0} max={100} step={1} value={[s.maxWidth || 0]} onValueChange={([v]) => update(sel, { maxWidth: v })} />
+                    <Input type="number" min={0} max={100} value={s.maxWidth || 0} onChange={(e) => update(sel, { maxWidth: clampNum(e.target.value, 0, 100) })} className="h-8 w-16 text-xs" />
+                  </div>
+                  <p className="text-[10px] text-muted-foreground mt-1">Nama panjang otomatis turun ke baris berikutnya bila melebihi lebar ini. Bisa juga tekan Enter saat mengetik nama.</p>
+                </div>
                 <div className="flex items-center gap-2">
                   <div className="flex-1"><Label className="text-xs">Warna</Label><Input type="color" value={s.color} onChange={(e) => update(sel, { color: e.target.value })} className="h-9 p-1" /></div>
                   <div className="flex-1">
@@ -104,8 +119,20 @@ export default function OverlayEditor({ templateSrc, fields, onChange, sampleVal
               </>
             )}
             <div className="grid grid-cols-2 gap-2">
-              <div><Label className="text-xs">X ({s.x}%)</Label><Slider min={0} max={100} step={0.5} value={[s.x]} onValueChange={([v]) => update(sel, { x: v })} /></div>
-              <div><Label className="text-xs">Y ({s.y}%)</Label><Slider min={0} max={100} step={0.5} value={[s.y]} onValueChange={([v]) => update(sel, { y: v })} /></div>
+              <div>
+                <Label className="text-xs">Posisi X ({s.x}%)</Label>
+                <div className="flex items-center gap-2">
+                  <Slider className="flex-1" min={0} max={100} step={0.5} value={[s.x]} onValueChange={([v]) => update(sel, { x: v })} />
+                  <Input type="number" step={0.5} min={0} max={100} value={s.x} onChange={(e) => update(sel, { x: clampNum(e.target.value, 0, 100) })} className="h-8 w-16 text-xs" />
+                </div>
+              </div>
+              <div>
+                <Label className="text-xs">Posisi Y ({s.y}%)</Label>
+                <div className="flex items-center gap-2">
+                  <Slider className="flex-1" min={0} max={100} step={0.5} value={[s.y]} onValueChange={([v]) => update(sel, { y: v })} />
+                  <Input type="number" step={0.5} min={0} max={100} value={s.y} onChange={(e) => update(sel, { y: clampNum(e.target.value, 0, 100) })} className="h-8 w-16 text-xs" />
+                </div>
+              </div>
             </div>
           </div>
         )}

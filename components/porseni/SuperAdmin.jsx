@@ -18,7 +18,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { StatCard, StatusBadge, PageHeader, Empty } from '@/components/porseni/shared'
 import TemplateStudio from '@/components/porseni/TemplateStudio'
-import { CATEGORIES, LOMBA_TYPES, GENDER_LABEL, GENDERS, ROLES, ROLE_LABEL, CERT_DEFAULT_FIELDS, CERT_PANITIA_FIELDS, IDCARD_PESERTA_FIELDS, IDCARD_PANITIA_FIELDS } from '@/lib/porseni/constants'
+import { CATEGORIES, LOMBA_TYPES, GENDER_LABEL, GENDER_CERT_LABEL, GENDERS, ROLES, ROLE_LABEL, CERT_DEFAULT_FIELDS, CERT_PANITIA_FIELDS, IDCARD_PESERTA_FIELDS, IDCARD_PANITIA_FIELDS } from '@/lib/porseni/constants'
 import { api, uploadFile, fileUrl, getToken } from '@/lib/porseni/api'
 import { downloadLombaTemplate, parseLombaWorkbook, downloadUserTemplate, parseUserWorkbook, exportUsersToExcel } from '@/lib/porseni/excel'
 
@@ -638,7 +638,7 @@ function ManajemenPengguna() {
 }
 
 function EditUserDialog({ state, lomba, onClose, onSaved }) {
-  const [form, setForm] = useState({ name: '', email: '', role: 'panitia', madrasah_name: '', assigned_lomba_id: '' })
+  const [form, setForm] = useState({ name: '', email: '', role: 'panitia', gender: '', madrasah_name: '', assigned_lomba_id: '' })
   const [saving, setSaving] = useState(false)
   useEffect(() => {
     if (state.open && state.user) {
@@ -647,6 +647,7 @@ function EditUserDialog({ state, lomba, onClose, onSaved }) {
         name: u.name || '',
         email: u.email || '',
         role: u.role || 'panitia',
+        gender: u.gender || '',
         madrasah_name: u.madrasah_name || '',
         assigned_lomba_id: u.assigned_lomba_id || '',
       })
@@ -664,6 +665,7 @@ function EditUserDialog({ state, lomba, onClose, onSaved }) {
         name: form.name.trim(),
         email: form.email.trim(),
         role: form.role,
+        gender: form.gender || null,
         madrasah_name: form.role === 'admin_madrasah' ? form.madrasah_name.trim() : null,
         assigned_lomba_id: form.role === 'panitia' ? form.assigned_lomba_id : null,
       }
@@ -693,6 +695,16 @@ function EditUserDialog({ state, lomba, onClose, onSaved }) {
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
                 {ROLES.filter((r) => r.value !== 'super_admin').map((r) => <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1.5">
+            <Label>Jenis Kelamin (untuk Sertifikat & ID Card)</Label>
+            <Select value={form.gender || 'none'} onValueChange={(v) => setForm((f) => ({ ...f, gender: v === 'none' ? '' : v }))}>
+              <SelectTrigger><SelectValue placeholder="Pilih jenis kelamin" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">- Tidak diisi -</SelectItem>
+                {GENDERS.map((g) => <SelectItem key={g.value} value={g.value}>{g.label}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
@@ -849,7 +861,7 @@ function EditBiodataDialogSA({ peserta, lomba, open, onOpenChange, onSaved }) {
         <div className="grid sm:grid-cols-2 gap-3 mt-2">
           <div className="space-y-1.5 sm:col-span-2">
             <Label>Nama Lengkap</Label>
-            <Input value={form.participant_name} onChange={(e) => set('participant_name', e.target.value)} placeholder="Nama peserta" />
+            <Textarea rows={2} value={form.participant_name} onChange={(e) => set('participant_name', e.target.value)} placeholder="Nama peserta (tekan Enter untuk baris baru)" />
           </div>
           <div className="space-y-1.5">
             <Label>Jenis Kelamin</Label>
@@ -1256,6 +1268,7 @@ function SertifikatJuara() {
   const pesertaById = Object.fromEntries((raw.peserta || []).map((p) => [p.id, p]))
   const photoOf = (p) => (includePhoto && p && p.files?.pas_photo ? fileUrl(p.files.pas_photo.id) : null)
   const gLabel = (g) => (g === 'L' ? 'Putra' : g === 'P' ? 'Putri' : '')
+  const gc = (g) => GENDER_CERT_LABEL[g] || ''
   const juaraFiltered = (raw.juara || []).filter((j) => (lombaFilter === 'all' ? true : j.lomba_id === lombaFilter))
   const targets = []
   for (const j of juaraFiltered) {
@@ -1267,7 +1280,7 @@ function SertifikatJuara() {
         targets.push({
           label: `${rankLabel} - ${j.madrasah_name} (Regu)`,
           filename: `Sertifikat_${j.rank}_${gl}_${(j.madrasah_name || 'regu').replace(/\s+/g, '_')}.png`,
-          values: { participant_name: j.madrasah_name, madrasah_name: j.madrasah_name, lomba_name: lombaName, rank: rankLabel, photo: null },
+          values: { participant_name: j.madrasah_name, madrasah_name: j.madrasah_name, lomba_name: lombaName, rank: rankLabel, gender_label: gc(j.gender), photo: null },
         })
       } else {
         const members = (raw.peserta || []).filter((p) => p.lomba_id === j.lomba_id && p.madrasah_name === j.madrasah_name && (j.gender ? p.gender === j.gender : true))
@@ -1275,13 +1288,13 @@ function SertifikatJuara() {
           targets.push({
             label: `${rankLabel} - ${j.madrasah_name} (tidak ada anggota)`,
             filename: `Sertifikat_${gl}_${(j.madrasah_name || 'regu').replace(/\s+/g, '_')}.png`,
-            values: { participant_name: j.madrasah_name, madrasah_name: j.madrasah_name, lomba_name: lombaName, rank: rankLabel, photo: null },
+            values: { participant_name: j.madrasah_name, madrasah_name: j.madrasah_name, lomba_name: lombaName, rank: rankLabel, gender_label: gc(j.gender), photo: null },
           })
         }
         members.forEach((p) => targets.push({
           label: `${rankLabel} - ${p.participant_name} (${j.madrasah_name})`,
           filename: `Sertifikat_${(p.participant_name || 'peserta').replace(/\s+/g, '_')}.png`,
-          values: { participant_name: p.participant_name, madrasah_name: p.madrasah_name, lomba_name: lombaName, rank: rankLabel, photo: photoOf(p) },
+          values: { participant_name: p.participant_name, madrasah_name: p.madrasah_name, lomba_name: lombaName, rank: rankLabel, gender_label: gc(p.gender || j.gender), photo: photoOf(p) },
         }))
       }
     } else {
@@ -1289,7 +1302,7 @@ function SertifikatJuara() {
       targets.push({
         label: `${rankLabel} - ${j.participant_name}`,
         filename: `Sertifikat_${(j.participant_name || 'peserta').replace(/\s+/g, '_')}.png`,
-        values: { participant_name: j.participant_name, madrasah_name: j.madrasah_name, lomba_name: lombaName, rank: rankLabel, photo: photoOf(p) },
+        values: { participant_name: j.participant_name, madrasah_name: j.madrasah_name, lomba_name: lombaName, rank: rankLabel, gender_label: gc(j.gender || (p && p.gender)), photo: photoOf(p) },
       })
     }
   }
@@ -1317,7 +1330,7 @@ function SertifikatJuara() {
         defaultFields={CERT_DEFAULT_FIELDS}
         targets={targets}
         loadingTargets={raw.loading}
-        sample={{ participant_name: 'Ahmad Fauzi', madrasah_name: 'MI Al-Hidayah', lomba_name: 'Kaligrafi', rank: 'Juara 1 Putra' }}
+        sample={{ participant_name: 'Ahmad Fauzi', madrasah_name: 'MI Al-Hidayah', lomba_name: 'Kaligrafi', rank: 'Juara 1 Putra', gender_label: 'Putra' }}
       />
     </div>
   )
@@ -1342,7 +1355,7 @@ function SertifikatPanitia() {
     .map((u) => ({
       label: `${u.name} — ${lm[u.assigned_lomba_id] || '-'}`,
       filename: `Sertifikat_Panitia_${(u.name || 'panitia').replace(/\s+/g, '_')}.png`,
-      values: { name: u.name, lomba_name: lm[u.assigned_lomba_id] || '-', photo: includePhoto ? (u.photo_url || null) : null },
+      values: { name: u.name, lomba_name: lm[u.assigned_lomba_id] || '-', gender_label: GENDER_CERT_LABEL[u.gender] || '', photo: includePhoto ? (u.photo_url || null) : null },
     }))
   return (
     <div>
@@ -1358,7 +1371,7 @@ function SertifikatPanitia() {
         defaultFields={CERT_PANITIA_FIELDS}
         targets={targets}
         loadingTargets={state.loading}
-        sample={{ name: 'Budi Santoso', lomba_name: 'Futsal' }}
+        sample={{ name: 'Budi Santoso', lomba_name: 'Futsal', gender_label: 'Putra' }}
       />
     </div>
   )
@@ -1397,7 +1410,7 @@ function IdCardPeserta() {
       label: `${p.nomor_peserta} - ${p.participant_name}`,
       filename: `IDCard_${(p.participant_name || 'peserta').replace(/\s+/g, '_')}.png`,
       baseImage: lmImg[p.lomba_id] || null,
-      values: { participant_name: p.participant_name, madrasah_name: p.madrasah_name, lomba_name: p.lomba_name, nomor_peserta: 'No. ' + p.nomor_peserta, photo: p.files?.pas_photo ? fileUrl(p.files.pas_photo.id) : null },
+      values: { participant_name: p.participant_name, madrasah_name: p.madrasah_name, lomba_name: p.lomba_name, nomor_peserta: 'No. ' + p.nomor_peserta, gender_label: GENDER_CERT_LABEL[p.gender] || '', photo: p.files?.pas_photo ? fileUrl(p.files.pas_photo.id) : null },
     }))
   return (
     <div>
@@ -1407,7 +1420,7 @@ function IdCardPeserta() {
         Lomba yang memiliki <b>Gambar ID Card</b> sendiri (diatur di Manajemen Lomba) akan otomatis memakai gambar tersebut. Lomba tanpa gambar khusus memakai template umum di bawah ini.
       </Card>
       <TemplateStudio type="idcard_peserta" defaultFields={IDCARD_PESERTA_FIELDS} targets={targets} loadingTargets={state.loading}
-        sample={{ participant_name: 'Ahmad Fauzi', madrasah_name: 'MI Al-Hidayah', lomba_name: 'Kaligrafi', nomor_peserta: 'No. 001' }} />
+        sample={{ participant_name: 'Ahmad Fauzi', madrasah_name: 'MI Al-Hidayah', lomba_name: 'Kaligrafi', nomor_peserta: 'No. 001', gender_label: 'Putra' }} />
     </div>
   )
 }
@@ -1430,13 +1443,13 @@ function IdCardPanitia() {
     .map((u) => ({
       label: `${u.name} — ${lm[u.assigned_lomba_id] || '-'}`,
       filename: `IDCard_Panitia_${(u.name || 'panitia').replace(/\s+/g, '_')}.png`,
-      values: { name: u.name, role_label: 'Panitia / Juri', lomba_name: lm[u.assigned_lomba_id] || '-', photo: u.photo_url || null },
+      values: { name: u.name, role_label: 'Panitia / Juri', lomba_name: lm[u.assigned_lomba_id] || '-', gender_label: GENDER_CERT_LABEL[u.gender] || '', photo: u.photo_url || null },
     }))
   return (
     <div>
       <LombaFilterBar lomba={state.lomba || []} value={lombaFilter} onChange={setLombaFilter} />
       <TemplateStudio type="idcard_panitia" defaultFields={IDCARD_PANITIA_FIELDS} targets={targets} loadingTargets={state.loading}
-        sample={{ name: 'Budi Santoso', role_label: 'Panitia / Juri', lomba_name: 'Futsal' }} />
+        sample={{ name: 'Budi Santoso', role_label: 'Panitia / Juri', lomba_name: 'Futsal', gender_label: 'Putra' }} />
     </div>
   )
 }

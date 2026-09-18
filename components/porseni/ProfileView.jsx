@@ -7,15 +7,17 @@ import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { PageHeader } from '@/components/porseni/shared'
 import { api, uploadFile, fileUrl } from '@/lib/porseni/api'
-import { ROLE_LABEL } from '@/lib/porseni/constants'
+import { ROLE_LABEL, GENDERS } from '@/lib/porseni/constants'
 
 export default function ProfileView({ user, onUpdated }) {
   const [profile, setProfile] = useState(null)
   const [lomba, setLomba] = useState([])
   const [loading, setLoading] = useState(true)
   const [name, setName] = useState('')
+  const [gender, setGender] = useState('')
   const [password, setPassword] = useState('')
   const [showPw, setShowPw] = useState(false)
   const [photoUrl, setPhotoUrl] = useState(null)
@@ -29,6 +31,7 @@ export default function ProfileView({ user, onUpdated }) {
       const [p, l] = await Promise.all([api('/auth/profile'), api('/lomba').catch(() => [])])
       setProfile(p)
       setName(p.name || '')
+      setGender(p.gender || '')
       setPhotoUrl(p.photo_url || null)
       setLomba(l || [])
     } catch (e) { toast.error(e.message) } finally { setLoading(false) }
@@ -55,7 +58,7 @@ export default function ProfileView({ user, onUpdated }) {
     if (password && password.length < 4) return toast.error('Sandi minimal 4 karakter')
     setSaving(true)
     try {
-      const body = { name: name.trim(), photo_url: photoUrl }
+      const body = { name: name.trim(), photo_url: photoUrl, gender }
       if (password) body.password = password
       const updated = await api('/auth/profile', { method: 'PUT', body })
       toast.success('Profil berhasil diperbarui')
@@ -115,6 +118,18 @@ export default function ProfileView({ user, onUpdated }) {
               <div className="space-y-1.5">
                 <Label>Divisi / Cabang Lomba</Label>
                 <Input value={lombaName(profile.assigned_lomba_id)} disabled />
+              </div>
+            )}
+            {profile.role !== 'super_admin' && (
+              <div className="space-y-1.5">
+                <Label>Jenis Kelamin (untuk Sertifikat & ID Card)</Label>
+                <Select value={gender || 'none'} onValueChange={(v) => setGender(v === 'none' ? '' : v)}>
+                  <SelectTrigger><SelectValue placeholder="Pilih jenis kelamin" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">- Tidak diisi -</SelectItem>
+                    {GENDERS.map((g) => <SelectItem key={g.value} value={g.value}>{g.label}</SelectItem>)}
+                  </SelectContent>
+                </Select>
               </div>
             )}
             <div className="space-y-1.5">

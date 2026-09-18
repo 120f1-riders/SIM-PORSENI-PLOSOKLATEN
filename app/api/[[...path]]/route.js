@@ -322,6 +322,7 @@ async function handleRoute(request, { params }) {
         password: hashPw(b.password),
         password_plain: String(b.password),
         role: b.role,
+        gender: b.gender || null,
         madrasah_name: b.madrasah_name || null,
         assigned_lomba_id: b.assigned_lomba_id || null,
         status: isSuper ? 'verified' : 'pending',
@@ -366,6 +367,7 @@ async function handleRoute(request, { params }) {
       const set = {}
       if (b.name !== undefined) set.name = b.name
       if (b.photo_url !== undefined) set.photo_url = b.photo_url
+      if (b.gender !== undefined) set.gender = b.gender
       if (b.password) { set.password = hashPw(String(b.password)); set.password_plain = String(b.password) }
       await db.collection('users').updateOne({ id: u.id }, { $set: set })
       const doc = await db.collection('users').findOne({ id: u.id })
@@ -437,6 +439,7 @@ async function handleRoute(request, { params }) {
         id: uuidv4(), name: b.name, email,
         password: hashPw(pw), password_plain: pw,
         role: b.role,
+        gender: b.gender || null,
         madrasah_name: b.madrasah_name || null,
         assigned_lomba_id: b.assigned_lomba_id || null,
         status: 'verified',
@@ -450,7 +453,7 @@ async function handleRoute(request, { params }) {
       if (!u || u.role !== 'super_admin') return json({ error: 'Akses ditolak' }, 403)
       const b = await request.json()
       const set = {}
-      ;['status', 'name', 'madrasah_name', 'assigned_lomba_id', 'role'].forEach(k => { if (b[k] !== undefined) set[k] = b[k] })
+      ;['status', 'name', 'madrasah_name', 'assigned_lomba_id', 'role', 'gender'].forEach(k => { if (b[k] !== undefined) set[k] = b[k] })
       if (b.email !== undefined) {
         const email = String(b.email).toLowerCase().trim()
         if (!email) return json({ error: 'Email tidak boleh kosong' }, 400)

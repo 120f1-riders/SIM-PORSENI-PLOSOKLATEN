@@ -1,16 +1,17 @@
 #!/usr/bin/env python3
 """
-Backend API Testing for Multi-device Login Feature
-Tests the token array implementation for simultaneous multi-device login
+Backend API Testing for User Gender Field Feature
+Tests gender field support in register, POST /users, PUT /users, PUT /auth/profile
 """
 
 import requests
 import json
 import sys
+import time
 from typing import Dict, Any
 
 # Base URL from .env
-BASE_URL = "https://porseni-data.preview.emergentagent.com/api"
+BASE_URL = "http://localhost:3000/api"
 
 # Seed credentials
 SUPER_ADMIN_EMAIL = "super@porseni.id"
@@ -52,7 +53,10 @@ def check_no_sensitive_leak(data: Dict[str, Any], context: str) -> bool:
         # For non-login responses (like /auth/me, /auth/profile)
         # Check top-level fields
         if 'POST /auth/login' not in context and 'POST /users' not in context:
-            forbidden_top_level = ['_id', 'password', 'password_plain', 'token', 'tokens']
+            forbidden_top_level = ['_id', 'password', 'token', 'tokens']
+            # password_plain is OK for /auth/profile (user can see own password)
+            if '/auth/profile' not in context:
+                forbidden_top_level.append('password_plain')
             for field in forbidden_top_level:
                 if field in data:
                     print_fail(f"{context}: response contains sensitive field '{field}'")
@@ -79,169 +83,375 @@ def check_no_sensitive_leak(data: Dict[str, Any], context: str) -> bool:
     
     return True
 
-def test_multi_device_core():
+def test_step_1_super_admin_login():
     """
-    SCENARIO 1: MULTI-DEVICE CORE
-    Login twice with same credentials, verify both tokens work
+    STEP 1: Super admin login
+    Verify no password/password_plain/token/tokens/_id leak in user object
     """
     print("\n" + "="*80)
-    print("SCENARIO 1: MULTI-DEVICE CORE - Login twice, both tokens must remain valid")
+    print("STEP 1: Super admin login (super@porseni.id / admin123)")
     print("="*80)
     
     try:
-        # Login first time (Device 1)
-        print_test("Device 1: Login with super@porseni.id/admin123")
-        resp1 = requests.post(f"{BASE_URL}/auth/login", json={
+        print_test("POST /auth/login with super@porseni.id / admin123")
+        resp = requests.post(f"{BASE_URL}/auth/login", json={
             "email": SUPER_ADMIN_EMAIL,
             "password": SUPER_ADMIN_PASSWORD
         })
         
-        if resp1.status_code != 200:
-            print_fail(f"Device 1 login failed: {resp1.status_code} - {resp1.text}")
-            return False
+        if resp.status_code != 200:
+            print_fail(f"Login failed: {resp.status_code} - {resp.text}")
+            return None
         
-        data1 = resp1.json()
-        token1 = data1.get('token')
+        data = resp.json()
+        token = data.get('token')
         
-        if not token1:
-            print_fail("Device 1 login response missing token")
-            return False
+        if not token:
+            print_fail("Login response missing token")
+            return None
         
-        print_pass(f"Device 1 login successful, token: {token1[:20]}...")
+        print_pass(f"Login successful, token: {token[:20]}...")
         
-        # Check no sensitive leak in login response
-        if not check_no_sensitive_leak(data1, "POST /auth/login (Device 1)"):
-            return False
-        print_pass("Device 1 login response: no sensitive data leak")
+        # Check no sensitive leak in user object
+        if not check_no_sensitive_leak(data, "POST /auth/login"):
+            return None
+        print_pass("Login response: user object does NOT leak password/password_plain/token/tokens/_id")
         
-        # Login second time (Device 2) - SAME credentials
-        print_test("Device 2: Login with SAME credentials (super@porseni.id/admin123)")
-        resp2 = requests.post(f"{BASE_URL}/auth/login", json={
-            "email": SUPER_ADMIN_EMAIL,
-            "password": SUPER_ADMIN_PASSWORD
-        })
-        
-        if resp2.status_code != 200:
-            print_fail(f"Device 2 login failed: {resp2.status_code} - {resp2.text}")
-            return False
-        
-        data2 = resp2.json()
-        token2 = data2.get('token')
-        
-        if not token2:
-            print_fail("Device 2 login response missing token")
-            return False
-        
-        print_pass(f"Device 2 login successful, token: {token2[:20]}...")
-        
-        # Verify tokens are different
-        if token1 == token2:
-            print_fail("Device 1 and Device 2 tokens are IDENTICAL (should be different)")
-            return False
-        print_pass("Device 1 and Device 2 tokens are DIFFERENT (as expected)")
-        
-        # Check no sensitive leak in second login response
-        if not check_no_sensitive_leak(data2, "POST /auth/login (Device 2)"):
-            return False
-        print_pass("Device 2 login response: no sensitive data leak")
-        
-        # CRITICAL TEST: Verify Device 1 token STILL works after Device 2 login
-        print_test("CRITICAL: Verify Device 1 token STILL VALID after Device 2 login")
-        resp_me1 = requests.get(f"{BASE_URL}/auth/me", headers={
-            "Authorization": f"Bearer {token1}"
-        })
-        
-        if resp_me1.status_code != 200:
-            print_fail(f"Device 1 token INVALIDATED after Device 2 login! Status: {resp_me1.status_code}")
-            print_fail("This is the KEY BUG: old device tokens should remain valid")
-            return False
-        
-        me1_data = resp_me1.json()
-        if me1_data.get('email') != SUPER_ADMIN_EMAIL:
-            print_fail(f"Device 1 /auth/me returned wrong user: {me1_data.get('email')}")
-            return False
-        
-        print_pass("✓✓✓ CRITICAL PASS: Device 1 token STILL VALID after Device 2 login")
-        
-        # Check no sensitive leak in /auth/me response
-        if not check_no_sensitive_leak(me1_data, "GET /auth/me (Device 1)"):
-            return False
-        print_pass("Device 1 /auth/me response: no sensitive data leak")
-        
-        # Verify Device 2 token also works
-        print_test("Verify Device 2 token works")
-        resp_me2 = requests.get(f"{BASE_URL}/auth/me", headers={
-            "Authorization": f"Bearer {token2}"
-        })
-        
-        if resp_me2.status_code != 200:
-            print_fail(f"Device 2 token invalid: {resp_me2.status_code}")
-            return False
-        
-        me2_data = resp_me2.json()
-        if me2_data.get('email') != SUPER_ADMIN_EMAIL:
-            print_fail(f"Device 2 /auth/me returned wrong user: {me2_data.get('email')}")
-            return False
-        
-        print_pass("Device 2 token works correctly")
-        
-        # Check no sensitive leak in Device 2 /auth/me response
-        if not check_no_sensitive_leak(me2_data, "GET /auth/me (Device 2)"):
-            return False
-        print_pass("Device 2 /auth/me response: no sensitive data leak")
-        
-        print_pass("✓✓✓ SCENARIO 1 COMPLETE: Multi-device login working - both tokens valid simultaneously")
-        return True
+        print_pass("✓✓✓ STEP 1 COMPLETE: Super admin login successful with no sensitive leak")
+        return token
         
     except Exception as e:
-        print_fail(f"Exception in test_multi_device_core: {str(e)}")
+        print_fail(f"Exception in test_step_1_super_admin_login: {str(e)}")
         import traceback
         traceback.print_exc()
-        return False
+        return None
 
-def test_no_sensitive_leak(super_token: str):
+def test_step_2_create_lomba(super_token: str):
     """
-    SCENARIO 2: NO SENSITIVE LEAK
-    Verify no token/tokens/password/password_plain/_id in responses
+    STEP 2: POST /lomba (super_admin) create individu lomba
     """
     print("\n" + "="*80)
-    print("SCENARIO 2: NO SENSITIVE LEAK - Verify no sensitive fields in responses")
+    print("STEP 2: POST /lomba (super_admin) create individu lomba")
     print("="*80)
     
     try:
-        # Test GET /users (super_admin) - should show password_plain but NOT token/tokens/password/_id
-        print_test("GET /users (super_admin) - should show password_plain but NOT token/tokens/password/_id")
+        print_test("POST /lomba with type='individu'")
+        resp = requests.post(f"{BASE_URL}/lomba", 
+            headers={"Authorization": f"Bearer {super_token}"},
+            json={
+                "name": "Test Gender Lomba",
+                "category": "Olahraga",
+                "type": "individu"
+            }
+        )
+        
+        if resp.status_code != 200:
+            print_fail(f"Failed to create lomba: {resp.status_code} - {resp.text}")
+            return None
+        
+        lomba = resp.json()
+        lomba_id = lomba.get('id')
+        print_pass(f"Created lomba: {lomba.get('name')} (id: {lomba_id})")
+        
+        print_pass("✓✓✓ STEP 2 COMPLETE: Lomba created successfully")
+        return lomba_id
+        
+    except Exception as e:
+        print_fail(f"Exception in test_step_2_create_lomba: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return None
+
+def test_step_3_create_panitia_with_gender(super_token: str, lomba_id: str):
+    """
+    STEP 3: POST /users (super_admin) create panitia with gender:'L' and assigned_lomba_id
+    Verify response includes gender='L', status 'verified', password_plain present,
+    and does NOT leak password (hash)/token/tokens/_id
+    """
+    print("\n" + "="*80)
+    print("STEP 3: POST /users create panitia with gender:'L' and assigned_lomba_id")
+    print("="*80)
+    
+    try:
+        panitia_email = f"panitia.gender.{int(time.time())}@porseni.id"
+        print_test(f"POST /users with gender:'L', assigned_lomba_id={lomba_id}")
+        resp = requests.post(f"{BASE_URL}/users",
+            headers={"Authorization": f"Bearer {super_token}"},
+            json={
+                "name": "Panitia Gender Test",
+                "email": panitia_email,
+                "role": "panitia",
+                "gender": "L",
+                "assigned_lomba_id": lomba_id
+            }
+        )
+        
+        if resp.status_code != 200:
+            print_fail(f"Failed to create panitia: {resp.status_code} - {resp.text}")
+            return None
+        
+        user_data = resp.json()
+        user_id = user_data.get('id')
+        print_pass(f"Created panitia user: {user_data.get('name')} ({user_data.get('email')})")
+        
+        # Verify gender='L'
+        if user_data.get('gender') != 'L':
+            print_fail(f"Expected gender='L', got: {user_data.get('gender')}")
+            return None
+        print_pass("Response includes gender='L'")
+        
+        # Verify status='verified'
+        if user_data.get('status') != 'verified':
+            print_fail(f"Expected status='verified', got: {user_data.get('status')}")
+            return None
+        print_pass("Response includes status='verified'")
+        
+        # Verify password_plain is present
+        if 'password_plain' not in user_data:
+            print_fail("Response does NOT include password_plain (should be visible to super_admin)")
+            return None
+        print_pass(f"Response includes password_plain='{user_data.get('password_plain')}'")
+        
+        # Check no sensitive leak (password hash/token/tokens/_id should NOT be present)
+        if not check_no_sensitive_leak(user_data, "POST /users"):
+            return None
+        print_pass("Response does NOT leak password (hash)/token/tokens/_id")
+        
+        print_pass("✓✓✓ STEP 3 COMPLETE: Panitia created with gender='L', all checks passed")
+        return {"id": user_id, "email": panitia_email, "password": user_data.get('password_plain')}
+        
+    except Exception as e:
+        print_fail(f"Exception in test_step_3_create_panitia_with_gender: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return None
+
+def test_step_4_get_users_shows_gender(super_token: str, panitia_id: str):
+    """
+    STEP 4: GET /users (super_admin) — the created panitia appears with gender='L'
+    Ensure no token/tokens/hash/_id leak (password_plain is allowed for super_admin listing)
+    """
+    print("\n" + "="*80)
+    print("STEP 4: GET /users (super_admin) — verify panitia appears with gender='L'")
+    print("="*80)
+    
+    try:
+        print_test("GET /users")
         resp = requests.get(f"{BASE_URL}/users", headers={
             "Authorization": f"Bearer {super_token}"
         })
         
         if resp.status_code != 200:
-            print_fail(f"GET /users failed: {resp.status_code}")
+            print_fail(f"GET /users failed: {resp.status_code} - {resp.text}")
             return False
         
         users = resp.json()
-        if not isinstance(users, list) or len(users) == 0:
-            print_fail("GET /users returned empty or invalid response")
+        if not isinstance(users, list):
+            print_fail(f"GET /users returned non-array: {type(users)}")
             return False
         
-        # Check that password_plain is present (for super_admin visibility)
-        has_password_plain = any('password_plain' in u for u in users)
-        if not has_password_plain:
-            print_fail("GET /users does NOT contain password_plain (should be visible to super_admin)")
+        print_pass(f"GET /users returned {len(users)} users")
+        
+        # Find the panitia user
+        panitia = next((u for u in users if u.get('id') == panitia_id), None)
+        if not panitia:
+            print_fail(f"Panitia user (id={panitia_id}) not found in GET /users response")
             return False
-        print_pass("GET /users contains password_plain (correct for super_admin)")
         
-        # Check no other sensitive fields
-        forbidden_fields = ['_id', 'password', 'token', 'tokens']
-        for user in users:
-            for field in forbidden_fields:
-                if field in user:
-                    print_fail(f"GET /users contains forbidden field '{field}'")
-                    return False
-        print_pass("GET /users does NOT leak _id/password/token/tokens")
+        print_pass(f"Found panitia user: {panitia.get('name')}")
         
-        # Test /auth/me - should NOT contain any sensitive fields
-        print_test("GET /auth/me - should NOT contain password/password_plain/token/tokens/_id")
+        # Verify gender='L'
+        if panitia.get('gender') != 'L':
+            print_fail(f"Expected gender='L', got: {panitia.get('gender')}")
+            return False
+        print_pass("Panitia has gender='L'")
+        
+        # Check no sensitive leak
+        if not check_no_sensitive_leak(users, "GET /users"):
+            return False
+        print_pass("GET /users does NOT leak token/tokens/hash/_id (password_plain is allowed)")
+        
+        print_pass("✓✓✓ STEP 4 COMPLETE: GET /users shows panitia with gender='L', no sensitive leak")
+        return True
+        
+    except Exception as e:
+        print_fail(f"Exception in test_step_4_get_users_shows_gender: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+def test_step_5_put_users_gender_p(super_token: str, panitia_id: str):
+    """
+    STEP 5: PUT /users/:id {gender:'P'} on that panitia -> then GET /users shows gender='P'
+    """
+    print("\n" + "="*80)
+    print("STEP 5: PUT /users/:id {gender:'P'} -> verify GET /users shows gender='P'")
+    print("="*80)
+    
+    try:
+        print_test(f"PUT /users/{panitia_id} with gender:'P'")
+        resp = requests.put(f"{BASE_URL}/users/{panitia_id}",
+            headers={"Authorization": f"Bearer {super_token}"},
+            json={"gender": "P"}
+        )
+        
+        if resp.status_code != 200:
+            print_fail(f"PUT /users failed: {resp.status_code} - {resp.text}")
+            return False
+        
+        user_data = resp.json()
+        print_pass(f"PUT /users successful")
+        
+        # Verify gender='P' in response
+        if user_data.get('gender') != 'P':
+            print_fail(f"Expected gender='P' in PUT response, got: {user_data.get('gender')}")
+            return False
+        print_pass("PUT response shows gender='P'")
+        
+        # Verify with GET /users
+        print_test("GET /users to verify gender='P' persisted")
+        resp_get = requests.get(f"{BASE_URL}/users", headers={
+            "Authorization": f"Bearer {super_token}"
+        })
+        
+        if resp_get.status_code != 200:
+            print_fail(f"GET /users failed: {resp_get.status_code}")
+            return False
+        
+        users = resp_get.json()
+        panitia = next((u for u in users if u.get('id') == panitia_id), None)
+        
+        if not panitia:
+            print_fail(f"Panitia user not found in GET /users")
+            return False
+        
+        if panitia.get('gender') != 'P':
+            print_fail(f"Expected gender='P' in GET /users, got: {panitia.get('gender')}")
+            return False
+        
+        print_pass("GET /users shows gender='P' (persisted correctly)")
+        
+        print_pass("✓✓✓ STEP 5 COMPLETE: PUT /users gender='P' persisted successfully")
+        return True
+        
+    except Exception as e:
+        print_fail(f"Exception in test_step_5_put_users_gender_p: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+def test_step_6_put_users_gender_null(super_token: str, panitia_id: str):
+    """
+    STEP 6: PUT /users/:id {gender:null} -> GET /users shows gender null (cleared)
+    """
+    print("\n" + "="*80)
+    print("STEP 6: PUT /users/:id {gender:null} -> verify GET /users shows gender null")
+    print("="*80)
+    
+    try:
+        print_test(f"PUT /users/{panitia_id} with gender:null")
+        resp = requests.put(f"{BASE_URL}/users/{panitia_id}",
+            headers={"Authorization": f"Bearer {super_token}"},
+            json={"gender": None}
+        )
+        
+        if resp.status_code != 200:
+            print_fail(f"PUT /users failed: {resp.status_code} - {resp.text}")
+            return False
+        
+        user_data = resp.json()
+        print_pass(f"PUT /users successful")
+        
+        # Verify gender is null in response
+        if user_data.get('gender') is not None:
+            print_fail(f"Expected gender=null in PUT response, got: {user_data.get('gender')}")
+            return False
+        print_pass("PUT response shows gender=null")
+        
+        # Verify with GET /users
+        print_test("GET /users to verify gender=null persisted")
+        resp_get = requests.get(f"{BASE_URL}/users", headers={
+            "Authorization": f"Bearer {super_token}"
+        })
+        
+        if resp_get.status_code != 200:
+            print_fail(f"GET /users failed: {resp_get.status_code}")
+            return False
+        
+        users = resp_get.json()
+        panitia = next((u for u in users if u.get('id') == panitia_id), None)
+        
+        if not panitia:
+            print_fail(f"Panitia user not found in GET /users")
+            return False
+        
+        if panitia.get('gender') is not None:
+            print_fail(f"Expected gender=null in GET /users, got: {panitia.get('gender')}")
+            return False
+        
+        print_pass("GET /users shows gender=null (cleared successfully)")
+        
+        print_pass("✓✓✓ STEP 6 COMPLETE: PUT /users gender=null cleared successfully")
+        return True
+        
+    except Exception as e:
+        print_fail(f"Exception in test_step_6_put_users_gender_null: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+def test_step_7_regression(super_token: str):
+    """
+    STEP 7: Regression tests
+    (a) POST /auth/register with gender (optional) for admin_madrasah accepts gender without error
+    (b) GET /lomba (public, no auth) returns 200 array
+    (c) GET /auth/me with super_admin token returns 200 and no sensitive leak
+    """
+    print("\n" + "="*80)
+    print("STEP 7: Regression tests")
+    print("="*80)
+    
+    try:
+        # (a) POST /auth/register with gender (optional) for admin_madrasah
+        print_test("(a) POST /auth/register with gender:'L' for admin_madrasah")
+        admin_email = f"admin.gender.{int(time.time())}@porseni.id"
+        resp_reg = requests.post(f"{BASE_URL}/auth/register", json={
+            "name": "Admin Madrasah Gender Test",
+            "email": admin_email,
+            "password": "testpass123",
+            "role": "admin_madrasah",
+            "gender": "L",
+            "madrasah_name": "MI Test Gender"
+        })
+        
+        if resp_reg.status_code != 200:
+            print_fail(f"POST /auth/register failed: {resp_reg.status_code} - {resp_reg.text}")
+            return False
+        
+        reg_data = resp_reg.json()
+        if reg_data.get('pending') != True:
+            print_fail(f"Expected {{pending:true}}, got: {reg_data}")
+            return False
+        
+        print_pass("POST /auth/register with gender:'L' accepted without error, returns {pending:true}")
+        
+        # (b) GET /lomba (public, no auth) returns 200 array
+        print_test("(b) GET /lomba (public, no auth)")
+        resp_lomba = requests.get(f"{BASE_URL}/lomba")
+        
+        if resp_lomba.status_code != 200:
+            print_fail(f"GET /lomba failed: {resp_lomba.status_code}")
+            return False
+        
+        lomba_data = resp_lomba.json()
+        if not isinstance(lomba_data, list):
+            print_fail(f"GET /lomba returned non-array: {type(lomba_data)}")
+            return False
+        
+        print_pass(f"GET /lomba (public) returns 200 with array ({len(lomba_data)} items)")
+        
+        # (c) GET /auth/me with super_admin token returns 200 and no sensitive leak
+        print_test("(c) GET /auth/me with super_admin token")
         resp_me = requests.get(f"{BASE_URL}/auth/me", headers={
             "Authorization": f"Bearer {super_token}"
         })
@@ -250,222 +460,117 @@ def test_no_sensitive_leak(super_token: str):
             print_fail(f"GET /auth/me failed: {resp_me.status_code}")
             return False
         
-        if not check_no_sensitive_leak(resp_me.json(), "GET /auth/me"):
+        me_data = resp_me.json()
+        if not check_no_sensitive_leak(me_data, "GET /auth/me"):
             return False
-        print_pass("GET /auth/me does NOT leak sensitive fields")
         
-        print_pass("✓✓✓ SCENARIO 2 COMPLETE: No sensitive data leaks detected")
+        print_pass("GET /auth/me returns 200 with no sensitive leak")
+        
+        print_pass("✓✓✓ STEP 7 COMPLETE: All regression tests passed")
         return True
         
     except Exception as e:
-        print_fail(f"Exception in test_no_sensitive_leak: {str(e)}")
+        print_fail(f"Exception in test_step_7_regression: {str(e)}")
         import traceback
         traceback.print_exc()
         return False
 
-def test_new_user_multi_device(super_token: str):
+def test_step_8_put_auth_profile_gender(panitia_info: dict):
     """
-    SCENARIO 3: NEW USER MULTI-DEVICE
-    Create panitia user, login twice, verify both tokens work
+    STEP 8: PUT /auth/profile
+    Login as the panitia (default password 12345678), call PUT /auth/profile {gender:'L'}
+    Then GET /auth/profile returns gender='L' and no password/token leak
     """
     print("\n" + "="*80)
-    print("SCENARIO 3: NEW USER MULTI-DEVICE - Create panitia, login twice, both tokens valid")
+    print("STEP 8: PUT /auth/profile - panitia updates own gender")
     print("="*80)
     
     try:
-        # First create a lomba (needed for panitia)
-        print_test("Create a test lomba (individu)")
-        resp_lomba = requests.post(f"{BASE_URL}/lomba", 
-            headers={"Authorization": f"Bearer {super_token}"},
-            json={
-                "name": "Test Multi-Device Lomba",
-                "category": "Olahraga",
-                "type": "individu"
-            }
+        # Login as panitia
+        print_test(f"Login as panitia ({panitia_info['email']}) with password {panitia_info['password']}")
+        resp_login = requests.post(f"{BASE_URL}/auth/login", json={
+            "email": panitia_info['email'],
+            "password": panitia_info['password']
+        })
+        
+        if resp_login.status_code != 200:
+            print_fail(f"Panitia login failed: {resp_login.status_code} - {resp_login.text}")
+            return False
+        
+        login_data = resp_login.json()
+        panitia_token = login_data.get('token')
+        
+        if not panitia_token:
+            print_fail("Panitia login response missing token")
+            return False
+        
+        print_pass(f"Panitia login successful, token: {panitia_token[:20]}...")
+        
+        # PUT /auth/profile {gender:'L'}
+        print_test("PUT /auth/profile {gender:'L'}")
+        resp_put = requests.put(f"{BASE_URL}/auth/profile",
+            headers={"Authorization": f"Bearer {panitia_token}"},
+            json={"gender": "L"}
         )
         
-        if resp_lomba.status_code != 200:
-            print_fail(f"Failed to create lomba: {resp_lomba.status_code}")
+        if resp_put.status_code != 200:
+            print_fail(f"PUT /auth/profile failed: {resp_put.status_code} - {resp_put.text}")
             return False
         
-        lomba = resp_lomba.json()
-        lomba_id = lomba.get('id')
-        print_pass(f"Created lomba: {lomba.get('name')} (id: {lomba_id})")
+        put_data = resp_put.json()
+        print_pass("PUT /auth/profile successful")
         
-        # Create panitia user with unique email (timestamp to avoid conflicts)
-        print_test("Create panitia user via POST /users")
-        import time
-        panitia_email = f"panitia.multidev.{int(time.time())}@porseni.id"
-        resp_user = requests.post(f"{BASE_URL}/users",
-            headers={"Authorization": f"Bearer {super_token}"},
-            json={
-                "name": "Panitia Multi-Device Test",
-                "email": panitia_email,
-                "role": "panitia",
-                "assigned_lomba_id": lomba_id
-            }
-        )
-        
-        if resp_user.status_code != 200:
-            print_fail(f"Failed to create panitia user: {resp_user.status_code} - {resp_user.text}")
+        # Verify gender='L' in response
+        if put_data.get('gender') != 'L':
+            print_fail(f"Expected gender='L' in PUT response, got: {put_data.get('gender')}")
             return False
+        print_pass("PUT response shows gender='L'")
         
-        user_data = resp_user.json()
-        print_pass(f"Created panitia user: {user_data.get('name')} ({user_data.get('email')})")
+        # Check no password/token leak in PUT response
+        forbidden_fields = ['_id', 'password', 'token', 'tokens']
+        for field in forbidden_fields:
+            if field in put_data:
+                print_fail(f"PUT /auth/profile response contains forbidden field '{field}'")
+                return False
+        print_pass("PUT /auth/profile response does NOT leak password/token")
         
-        # Check no sensitive leak in POST /users response
-        if not check_no_sensitive_leak(user_data, "POST /users"):
-            return False
-        print_pass("POST /users response: no token/tokens/_id leak (password_plain OK)")
-        
-        # Login panitia first time (Device 1)
-        print_test("Panitia Device 1: Login with default password 12345678")
-        resp_p1 = requests.post(f"{BASE_URL}/auth/login", json={
-            "email": panitia_email,
-            "password": "12345678"  # default password
+        # GET /auth/profile to verify
+        print_test("GET /auth/profile to verify gender='L' persisted")
+        resp_get = requests.get(f"{BASE_URL}/auth/profile", headers={
+            "Authorization": f"Bearer {panitia_token}"
         })
         
-        if resp_p1.status_code != 200:
-            print_fail(f"Panitia Device 1 login failed: {resp_p1.status_code} - {resp_p1.text}")
+        if resp_get.status_code != 200:
+            print_fail(f"GET /auth/profile failed: {resp_get.status_code}")
             return False
         
-        data_p1 = resp_p1.json()
-        token_p1 = data_p1.get('token')
+        get_data = resp_get.json()
         
-        if not token_p1:
-            print_fail("Panitia Device 1 login response missing token")
+        # Verify gender='L'
+        if get_data.get('gender') != 'L':
+            print_fail(f"Expected gender='L' in GET /auth/profile, got: {get_data.get('gender')}")
             return False
+        print_pass("GET /auth/profile shows gender='L' (persisted correctly)")
         
-        print_pass(f"Panitia Device 1 login successful, token: {token_p1[:20]}...")
+        # Check no password/token leak in GET response
+        for field in forbidden_fields:
+            if field in get_data:
+                print_fail(f"GET /auth/profile response contains forbidden field '{field}'")
+                return False
+        print_pass("GET /auth/profile response does NOT leak password/token")
         
-        # Login panitia second time (Device 2)
-        print_test("Panitia Device 2: Login with SAME credentials")
-        resp_p2 = requests.post(f"{BASE_URL}/auth/login", json={
-            "email": panitia_email,
-            "password": "12345678"
-        })
-        
-        if resp_p2.status_code != 200:
-            print_fail(f"Panitia Device 2 login failed: {resp_p2.status_code} - {resp_p2.text}")
-            return False
-        
-        data_p2 = resp_p2.json()
-        token_p2 = data_p2.get('token')
-        
-        if not token_p2:
-            print_fail("Panitia Device 2 login response missing token")
-            return False
-        
-        print_pass(f"Panitia Device 2 login successful, token: {token_p2[:20]}...")
-        
-        # Verify tokens are different
-        if token_p1 == token_p2:
-            print_fail("Panitia Device 1 and Device 2 tokens are IDENTICAL (should be different)")
-            return False
-        print_pass("Panitia Device 1 and Device 2 tokens are DIFFERENT")
-        
-        # CRITICAL: Verify Device 1 token STILL works after Device 2 login
-        print_test("CRITICAL: Verify Panitia Device 1 token STILL VALID after Device 2 login")
-        resp_me_p1 = requests.get(f"{BASE_URL}/auth/me", headers={
-            "Authorization": f"Bearer {token_p1}"
-        })
-        
-        if resp_me_p1.status_code != 200:
-            print_fail(f"Panitia Device 1 token INVALIDATED after Device 2 login! Status: {resp_me_p1.status_code}")
-            return False
-        
-        me_p1_data = resp_me_p1.json()
-        if me_p1_data.get('email') != panitia_email:
-            print_fail(f"Panitia Device 1 /auth/me returned wrong user: {me_p1_data.get('email')}")
-            return False
-        
-        print_pass("✓✓✓ CRITICAL PASS: Panitia Device 1 token STILL VALID after Device 2 login")
-        
-        # Verify Device 2 token also works
-        print_test("Verify Panitia Device 2 token works")
-        resp_me_p2 = requests.get(f"{BASE_URL}/auth/me", headers={
-            "Authorization": f"Bearer {token_p2}"
-        })
-        
-        if resp_me_p2.status_code != 200:
-            print_fail(f"Panitia Device 2 token invalid: {resp_me_p2.status_code}")
-            return False
-        
-        me_p2_data = resp_me_p2.json()
-        if me_p2_data.get('email') != panitia_email:
-            print_fail(f"Panitia Device 2 /auth/me returned wrong user: {me_p2_data.get('email')}")
-            return False
-        
-        print_pass("Panitia Device 2 token works correctly")
-        
-        print_pass("✓✓✓ SCENARIO 3 COMPLETE: New user multi-device login working correctly")
+        print_pass("✓✓✓ STEP 8 COMPLETE: PUT /auth/profile gender update working correctly")
         return True
         
     except Exception as e:
-        print_fail(f"Exception in test_new_user_multi_device: {str(e)}")
-        import traceback
-        traceback.print_exc()
-        return False
-
-def test_regression():
-    """
-    SCENARIO 4: REGRESSION
-    No auth -> 401, invalid token -> 401, public endpoint -> 200
-    """
-    print("\n" + "="*80)
-    print("SCENARIO 4: REGRESSION - Auth validation and public endpoints")
-    print("="*80)
-    
-    try:
-        # Test /auth/me with NO Authorization header
-        print_test("GET /auth/me with NO Authorization header -> should return 401")
-        resp = requests.get(f"{BASE_URL}/auth/me")
-        
-        if resp.status_code != 401:
-            print_fail(f"GET /auth/me with no auth returned {resp.status_code} (expected 401)")
-            return False
-        
-        print_pass("GET /auth/me with no auth correctly returns 401")
-        
-        # Test /auth/me with INVALID token
-        print_test("GET /auth/me with INVALID token -> should return 401")
-        resp = requests.get(f"{BASE_URL}/auth/me", headers={
-            "Authorization": "Bearer invalid-random-token-12345"
-        })
-        
-        if resp.status_code != 401:
-            print_fail(f"GET /auth/me with invalid token returned {resp.status_code} (expected 401)")
-            return False
-        
-        print_pass("GET /auth/me with invalid token correctly returns 401")
-        
-        # Test public endpoint (GET /lomba)
-        print_test("GET /lomba (public, no auth) -> should return 200")
-        resp = requests.get(f"{BASE_URL}/lomba")
-        
-        if resp.status_code != 200:
-            print_fail(f"GET /lomba (public) returned {resp.status_code} (expected 200)")
-            return False
-        
-        data = resp.json()
-        if not isinstance(data, list):
-            print_fail(f"GET /lomba returned non-array: {type(data)}")
-            return False
-        
-        print_pass(f"GET /lomba (public) correctly returns 200 with array ({len(data)} items)")
-        
-        print_pass("✓✓✓ SCENARIO 4 COMPLETE: Regression tests passed")
-        return True
-        
-    except Exception as e:
-        print_fail(f"Exception in test_regression: {str(e)}")
+        print_fail(f"Exception in test_step_8_put_auth_profile_gender: {str(e)}")
         import traceback
         traceback.print_exc()
         return False
 
 def main():
     print("\n" + "="*80)
-    print("BACKEND API TESTING: Multi-device Login (Token Array)")
+    print("BACKEND API TESTING: User Gender Field Feature")
     print("="*80)
     print(f"Base URL: {BASE_URL}")
     print(f"Seed: {SUPER_ADMIN_EMAIL} / {SUPER_ADMIN_PASSWORD}")
@@ -473,25 +578,46 @@ def main():
     
     results = []
     
-    # Get super_admin token for subsequent tests
-    print_info("Getting super_admin token for setup...")
-    resp = requests.post(f"{BASE_URL}/auth/login", json={
-        "email": SUPER_ADMIN_EMAIL,
-        "password": SUPER_ADMIN_PASSWORD
-    })
-    
-    if resp.status_code != 200:
-        print_fail(f"Failed to get super_admin token: {resp.status_code}")
+    # STEP 1: Super admin login
+    super_token = test_step_1_super_admin_login()
+    if not super_token:
+        print_fail("STEP 1 FAILED - Cannot continue")
         sys.exit(1)
+    results.append(("STEP 1: Super admin login", True))
     
-    super_token = resp.json().get('token')
-    print_pass(f"Got super_admin token: {super_token[:20]}...")
+    # STEP 2: Create lomba
+    lomba_id = test_step_2_create_lomba(super_token)
+    if not lomba_id:
+        print_fail("STEP 2 FAILED - Cannot continue")
+        sys.exit(1)
+    results.append(("STEP 2: Create lomba", True))
     
-    # Run all test scenarios
-    results.append(("SCENARIO 1: Multi-device core", test_multi_device_core()))
-    results.append(("SCENARIO 2: No sensitive leak", test_no_sensitive_leak(super_token)))
-    results.append(("SCENARIO 3: New user multi-device", test_new_user_multi_device(super_token)))
-    results.append(("SCENARIO 4: Regression", test_regression()))
+    # STEP 3: Create panitia with gender:'L'
+    panitia_info = test_step_3_create_panitia_with_gender(super_token, lomba_id)
+    if not panitia_info:
+        print_fail("STEP 3 FAILED - Cannot continue")
+        sys.exit(1)
+    results.append(("STEP 3: Create panitia with gender:'L'", True))
+    
+    # STEP 4: GET /users shows gender='L'
+    result_4 = test_step_4_get_users_shows_gender(super_token, panitia_info['id'])
+    results.append(("STEP 4: GET /users shows gender='L'", result_4))
+    
+    # STEP 5: PUT /users gender='P'
+    result_5 = test_step_5_put_users_gender_p(super_token, panitia_info['id'])
+    results.append(("STEP 5: PUT /users gender='P'", result_5))
+    
+    # STEP 6: PUT /users gender=null
+    result_6 = test_step_6_put_users_gender_null(super_token, panitia_info['id'])
+    results.append(("STEP 6: PUT /users gender=null", result_6))
+    
+    # STEP 7: Regression tests
+    result_7 = test_step_7_regression(super_token)
+    results.append(("STEP 7: Regression tests", result_7))
+    
+    # STEP 8: PUT /auth/profile gender
+    result_8 = test_step_8_put_auth_profile_gender(panitia_info)
+    results.append(("STEP 8: PUT /auth/profile gender", result_8))
     
     # Print summary
     print("\n" + "="*80)
@@ -506,7 +632,7 @@ def main():
         print(f"{status} - {name}")
     
     print("="*80)
-    print(f"Total: {passed}/{total} scenarios passed")
+    print(f"Total: {passed}/{total} steps passed")
     print("="*80)
     
     if passed == total:

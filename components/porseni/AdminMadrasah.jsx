@@ -6,6 +6,7 @@ import { Users, CheckCircle2, Clock, UserPlus, Loader2, Upload, FileText, Trash2
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -144,7 +145,7 @@ function Pendaftaran({ user, lomba, onDone }) {
               <div className="space-y-4">
                 <div className="space-y-1.5">
                   <Label>Nama Lengkap</Label>
-                  <Input value={form.participant_name} onChange={(e) => set('participant_name', e.target.value)} placeholder="Nama peserta" />
+                  <Textarea rows={2} value={form.participant_name} onChange={(e) => set('participant_name', e.target.value)} placeholder="Nama peserta (tekan Enter untuk baris baru)" />
                 </div>
                 <div className="space-y-1.5">
                   <Label>Jenis Kelamin</Label>
@@ -223,7 +224,7 @@ function TeamMemberCard({ index, member, onChange, lombaName, madrasahName }) {
       <div className="grid sm:grid-cols-2 gap-3">
         <div className="space-y-1.5">
           <Label className="text-xs">Nama Lengkap</Label>
-          <Input value={member.participant_name} onChange={(e) => onChange({ participant_name: e.target.value })} placeholder="Nama anggota" />
+          <Textarea rows={2} value={member.participant_name} onChange={(e) => onChange({ participant_name: e.target.value })} placeholder="Nama anggota (tekan Enter untuk baris baru)" />
         </div>
         <div className="space-y-1.5">
           <Label className="text-xs">Jenis Kelamin</Label>
@@ -514,7 +515,7 @@ function EditBiodataDialog({ peserta, lomba, open, onOpenChange, onSaved }) {
         <div className="space-y-3 mt-2">
           <div className="space-y-1.5">
             <Label>Nama Lengkap</Label>
-            <Input value={form.participant_name} onChange={(e) => set('participant_name', e.target.value)} placeholder="Nama peserta" />
+            <Textarea rows={2} value={form.participant_name} onChange={(e) => set('participant_name', e.target.value)} placeholder="Nama peserta (tekan Enter untuk baris baru)" />
           </div>
           <div className="space-y-1.5">
             <Label>Jenis Kelamin</Label>
