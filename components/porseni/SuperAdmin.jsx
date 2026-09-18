@@ -1410,7 +1410,7 @@ function IdCardPeserta() {
       label: `${p.nomor_peserta} - ${p.participant_name}`,
       filename: `IDCard_${(p.participant_name || 'peserta').replace(/\s+/g, '_')}.png`,
       baseImage: lmImg[p.lomba_id] || null,
-      values: { participant_name: p.participant_name, madrasah_name: p.madrasah_name, lomba_name: p.lomba_name, nomor_peserta: 'No. ' + p.nomor_peserta, gender_label: GENDER_CERT_LABEL[p.gender] || '', photo: p.files?.pas_photo ? fileUrl(p.files.pas_photo.id) : null },
+      values: { participant_name: p.participant_name, madrasah_name: p.madrasah_name, lomba_name: p.lomba_name, nomor_peserta: p.nomor_peserta, gender_label: GENDER_CERT_LABEL[p.gender] || '', photo: p.files?.pas_photo ? fileUrl(p.files.pas_photo.id) : null },
     }))
   return (
     <div>
@@ -1420,7 +1420,7 @@ function IdCardPeserta() {
         Lomba yang memiliki <b>Gambar ID Card</b> sendiri (diatur di Manajemen Lomba) akan otomatis memakai gambar tersebut. Lomba tanpa gambar khusus memakai template umum di bawah ini.
       </Card>
       <TemplateStudio type="idcard_peserta" defaultFields={IDCARD_PESERTA_FIELDS} targets={targets} loadingTargets={state.loading}
-        sample={{ participant_name: 'Ahmad Fauzi', madrasah_name: 'MI Al-Hidayah', lomba_name: 'Kaligrafi', nomor_peserta: 'No. 001', gender_label: 'Putra' }} />
+        sample={{ participant_name: 'Ahmad Fauzi', madrasah_name: 'MI Al-Hidayah', lomba_name: 'Kaligrafi', nomor_peserta: '001', gender_label: 'Putra' }} />
     </div>
   )
 }

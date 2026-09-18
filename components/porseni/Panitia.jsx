@@ -299,7 +299,7 @@ function IdCardCetak({ lomba, peserta, loading }) {
     label: `${p.nomor_peserta} - ${p.participant_name}`,
     filename: `IDCard_${(p.participant_name || 'peserta').replace(/\s+/g, '_')}.png`,
     baseImage: lomba?.idcard_image_url || null,
-    values: { participant_name: p.participant_name, madrasah_name: p.madrasah_name, lomba_name: p.lomba_name, nomor_peserta: 'No. ' + p.nomor_peserta, photo: p.files?.pas_photo ? fileUrl(p.files.pas_photo.id) : null },
+    values: { participant_name: p.participant_name, madrasah_name: p.madrasah_name, lomba_name: p.lomba_name, nomor_peserta: p.nomor_peserta, photo: p.files?.pas_photo ? fileUrl(p.files.pas_photo.id) : null },
   }))
   return (
     <div>
@@ -310,7 +310,7 @@ function IdCardCetak({ lomba, peserta, loading }) {
         defaultFields={IDCARD_PESERTA_FIELDS}
         targets={targets}
         loadingTargets={loading}
-        sample={{ participant_name: 'Ahmad Fauzi', madrasah_name: 'MI Al-Hidayah', lomba_name: 'Kaligrafi', nomor_peserta: 'No. 001' }}
+        sample={{ participant_name: 'Ahmad Fauzi', madrasah_name: 'MI Al-Hidayah', lomba_name: 'Kaligrafi', nomor_peserta: '001' }}
       />
     </div>
   )
