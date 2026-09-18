@@ -10,7 +10,7 @@ import sys
 from typing import Dict, Any
 
 # Base URL from .env
-BASE_URL = "https://porseni-filter.preview.emergentagent.com/api"
+BASE_URL = "https://porseni-data.preview.emergentagent.com/api"
 
 # Seed credentials
 SUPER_ADMIN_EMAIL = "super@porseni.id"
