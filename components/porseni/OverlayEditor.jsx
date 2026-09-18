@@ -5,12 +5,30 @@ import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { Slider } from '@/components/ui/slider'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { computeFitSize } from '@/lib/porseni/canvasgen'
 
 export default function OverlayEditor({ templateSrc, fields, onChange, sampleValues = {} }) {
   const ref = useRef(null)
+  const measureRef = useRef(null)
   const [cw, setCw] = useState(600)
   const [dragIdx, setDragIdx] = useState(-1)
   const [sel, setSel] = useState(0)
+
+  const getMeasureCtx = () => {
+    if (!measureRef.current) measureRef.current = document.createElement('canvas').getContext('2d')
+    return measureRef.current
+  }
+
+  // Ukuran font untuk pratinjau (mengecil otomatis bila autoFit aktif)
+  const previewSize = (f) => {
+    const base = (f.size || 0.04) * cw
+    const maxW = f.maxWidth ? (f.maxWidth / 100) * cw : 0
+    if (!f.autoFit || maxW <= 0) return base
+    const txt = sampleValues[f.key] != null ? String(sampleValues[f.key]) : (f.label || '')
+    try {
+      return computeFitSize(getMeasureCtx(), txt, { baseSizePx: base, maxWidthPx: maxW, maxLines: f.maxLines || 2, bold: f.bold, font: f.font })
+    } catch (e) { return base }
+  }
 
   useEffect(() => {
     const measure = () => { if (ref.current) setCw(ref.current.offsetWidth) }
@@ -58,7 +76,7 @@ export default function OverlayEditor({ templateSrc, fields, onChange, sampleVal
               <div
                 key={i}
                 onPointerDown={() => { setDragIdx(i); setSel(i) }}
-                style={{ left: f.x + '%', top: f.y + '%', transform: 'translate(-50%,-50%)', color: f.color, fontFamily: f.font, fontWeight: f.bold ? 700 : 400, fontSize: (f.size * cw) + 'px', maxWidth: f.maxWidth ? (f.maxWidth + '%') : 'none', whiteSpace: f.maxWidth ? 'pre-line' : 'pre', textAlign: f.align || 'center' }}
+                style={{ left: f.x + '%', top: f.y + '%', transform: 'translate(-50%,-50%)', color: f.color, fontFamily: f.font, fontWeight: f.bold ? 700 : 400, fontSize: previewSize(f) + 'px', maxWidth: f.maxWidth ? (f.maxWidth + '%') : 'none', whiteSpace: f.maxWidth ? 'pre-line' : 'pre', textAlign: f.align || 'center' }}
                 className={`absolute cursor-move px-1 leading-tight ${sel === i ? 'ring-2 ring-primary rounded' : ''}`}
               >{sampleValues[f.key] != null ? sampleValues[f.key] : f.label}</div>
             )
@@ -100,6 +118,29 @@ export default function OverlayEditor({ templateSrc, fields, onChange, sampleVal
                     <Input type="number" min={0} max={100} value={s.maxWidth || 0} onChange={(e) => update(sel, { maxWidth: clampNum(e.target.value, 0, 100) })} className="h-8 w-16 text-xs" />
                   </div>
                   <p className="text-[10px] text-muted-foreground mt-1">Nama panjang otomatis turun ke baris berikutnya bila melebihi lebar ini. Bisa juga tekan Enter saat mengetik nama.</p>
+                </div>
+                <div className="rounded-md border bg-muted/40 p-2 space-y-2">
+                  <label className="flex items-center gap-2 text-sm font-medium">
+                    <input
+                      type="checkbox"
+                      checked={!!s.autoFit}
+                      onChange={(e) => {
+                        const on = e.target.checked
+                        update(sel, { autoFit: on, maxWidth: on && !s.maxWidth ? 55 : s.maxWidth, maxLines: s.maxLines || 2 })
+                      }}
+                    />
+                    Auto-Kecil (ukuran mengecil otomatis agar muat)
+                  </label>
+                  {s.autoFit && (
+                    <div>
+                      <Label className="text-xs">Maks Baris ({s.maxLines || 2})</Label>
+                      <div className="flex items-center gap-2">
+                        <Slider className="flex-1" min={1} max={4} step={1} value={[s.maxLines || 2]} onValueChange={([v]) => update(sel, { maxLines: v })} />
+                        <Input type="number" min={1} max={4} value={s.maxLines || 2} onChange={(e) => update(sel, { maxLines: clampNum(e.target.value, 1, 4) })} className="h-8 w-16 text-xs" />
+                      </div>
+                      <p className="text-[10px] text-muted-foreground mt-1">Bila nama panjang, ukuran font otomatis diperkecil agar muat dalam batas lebar & jumlah baris ini (butuh "Lebar Maks Baris" &gt; 0).</p>
+                    </div>
+                  )}
                 </div>
                 <div className="flex items-center gap-2">
                   <div className="flex-1"><Label className="text-xs">Warna</Label><Input type="color" value={s.color} onChange={(e) => update(sel, { color: e.target.value })} className="h-9 p-1" /></div>

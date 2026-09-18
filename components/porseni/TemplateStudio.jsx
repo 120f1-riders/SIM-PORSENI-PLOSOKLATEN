@@ -10,6 +10,17 @@ import OverlayEditor from '@/components/porseni/OverlayEditor'
 import { api, uploadFile, fileUrl } from '@/lib/porseni/api'
 import { renderOverlay, downloadDataUrl } from '@/lib/porseni/canvasgen'
 
+// Aktifkan Auto-Kecil untuk field nama pada template lama yang belum punya properti ini
+function withAutoFitDefaults(arr) {
+  return (arr || []).map((f) => {
+    const isName = f.key === 'participant_name' || f.key === 'name'
+    if (isName && f.autoFit === undefined) {
+      return { ...f, autoFit: true, maxLines: f.maxLines || 2, maxWidth: f.maxWidth || 55 }
+    }
+    return f
+  })
+}
+
 export default function TemplateStudio({ type, defaultFields, targets, loadingTargets, sample, readOnly = false }) {
   const [imageUrl, setImageUrl] = useState(null)
   const [fields, setFields] = useState(defaultFields)
@@ -23,7 +34,7 @@ export default function TemplateStudio({ type, defaultFields, targets, loadingTa
     (async () => {
       try {
         const list = await api(`/templates?type=${type}`)
-        if (list[0]) { setImageUrl(list[0].image_url); if (list[0].fields?.length) setFields(list[0].fields) }
+        if (list[0]) { setImageUrl(list[0].image_url); if (list[0].fields?.length) setFields(withAutoFitDefaults(list[0].fields)) }
       } catch (e) { /* ignore */ } finally { setLoaded(true) }
     })()
   }, [type])
