@@ -9,7 +9,7 @@ import json
 from datetime import datetime
 
 # Base URL from .env
-BASE_URL = "https://instant-resize.preview.emergentagent.com/api"
+BASE_URL = "https://align-image-names.preview.emergentagent.com/api"
 
 # Test data storage
 test_data = {

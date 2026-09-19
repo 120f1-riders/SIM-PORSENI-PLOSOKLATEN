@@ -50,6 +50,9 @@ export default function OverlayEditor({ templateSrc, fields, onChange, sampleVal
       let topPct
       if (f.flowBelow && bottom[f.flowBelow] != null) {
         topPct = bottom[f.flowBelow] + (f.flowGap != null ? f.flowGap : 2)
+      } else if (f.vAlign === 'top') {
+        // RATA-ATAS: baris pertama tetap di f.y (baris berikutnya turun ke bawah)
+        topPct = f.y - lineHpct / 2
       } else {
         topPct = f.y - (n * lineHpct) / 2
       }
@@ -181,6 +184,15 @@ export default function OverlayEditor({ templateSrc, fields, onChange, sampleVal
                     />
                     Auto-Kecil (ukuran mengecil otomatis agar muat)
                   </label>
+                  <label className="flex items-center gap-2 text-sm font-medium">
+                    <input
+                      type="checkbox"
+                      checked={s.vAlign === 'top'}
+                      onChange={(e) => update(sel, { vAlign: e.target.checked ? 'top' : undefined })}
+                    />
+                    Rata Atas (jarak nama konsisten 1/2 baris)
+                  </label>
+                  <p className="text-[10px] text-muted-foreground">Aktifkan agar baris pertama nama selalu mulai di posisi yang sama; baris ke-2 (nama panjang) turun ke bawah, tidak naik ke atas.</p>
                   {s.autoFit && (
                     <div>
                       <Label className="text-xs">Maks Baris ({s.maxLines || 2})</Label>

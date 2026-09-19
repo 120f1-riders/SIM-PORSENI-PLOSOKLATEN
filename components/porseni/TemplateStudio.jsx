@@ -20,6 +20,10 @@ function withAutoFitDefaults(arr, type) {
     if (isName && f.autoFit === undefined) {
       nf = { ...nf, autoFit: true, maxLines: f.maxLines || 2, maxWidth: f.maxWidth || 55 }
     }
+    // Nama peserta/panitia dibuat RATA-ATAS agar jarak nama konsisten (1 baris vs 2 baris)
+    if (isName && nf.vAlign === undefined) {
+      nf = { ...nf, vAlign: 'top' }
+    }
     // ID Card / Sertifikat: nama madrasah otomatis mengalir sedikit di bawah nama peserta (naik saat nama pendek)
     if (flowType && f.key === 'madrasah_name' && f.flowBelow === undefined) {
       nf = { ...nf, flowBelow: 'participant_name', flowGap: f.flowGap != null ? f.flowGap : (t.startsWith('idcard') ? 2 : 3) }
