@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import {
   LayoutDashboard, UserPlus, Users, Trophy, ShieldCheck, Award, IdCard,
-  Printer, Upload, LogOut, GraduationCap, Menu, X, User, Cloud, Database,
+  Printer, Upload, LogOut, GraduationCap, Menu, X, User, Cloud, Database, Medal,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ROLE_LABEL } from '@/lib/porseni/constants'
@@ -19,6 +19,7 @@ const MENUS = {
     { id: 'pengguna', label: 'Manajemen Pengguna', icon: ShieldCheck },
     { id: 'pendaftar', label: 'Data Pendaftar', icon: Users },
     { id: 'cetak', label: 'Cetak Administrasi', icon: Printer },
+    { id: 'juara', label: 'Manajemen Juara', icon: Medal },
     { id: 'sertifikat', label: 'Manajemen Sertifikat', icon: Award },
     { id: 'idcard', label: 'ID Card', icon: IdCard },
     { id: 'integrasi', label: 'Integrasi Google', icon: Cloud },

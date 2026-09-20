@@ -81,6 +81,12 @@ export default function OverlayEditor({ templateSrc, fields, onChange, sampleVal
     setSel(fields.length)
   }
   const removeField = (i) => {
+    const f = fields[i]
+    // Konfirmasi untuk elemen bawaan (bukan teks kustom) karena tidak bisa ditambah ulang dari UI
+    if (f && !f.custom) {
+      const nama = f.type === 'photo' ? 'Kotak Foto' : (f.key || 'elemen')
+      if (!window.confirm(`Hapus elemen "${nama}" dari tata letak? Elemen ini tidak akan tampil pada hasil. (Muat ulang halaman untuk mengembalikan bila belum disimpan)`)) return
+    }
     const nf = fields.filter((_, j) => j !== i)
     onChange(nf)
     setSel(Math.max(0, Math.min(i, nf.length - 1)))
@@ -143,9 +149,7 @@ export default function OverlayEditor({ templateSrc, fields, onChange, sampleVal
           <div className="border rounded-lg p-3 space-y-3">
             <div className="flex items-center justify-between gap-2">
               <div className="text-sm font-semibold">{s.type === 'photo' ? 'Kotak Foto' : (s.custom ? 'Teks Kustom' : 'Teks')}: {s.custom ? (s.label || 'Teks') : s.key}</div>
-              {s.custom && (
-                <button onClick={() => removeField(sel)} className="text-xs px-2 py-1 rounded border border-red-300 text-red-600 hover:bg-red-50">Hapus</button>
-              )}
+              <button onClick={() => removeField(sel)} className="text-xs px-2 py-1 rounded border border-red-300 text-red-600 hover:bg-red-50">Hapus</button>
             </div>
             {s.type === 'photo' ? (
               <>

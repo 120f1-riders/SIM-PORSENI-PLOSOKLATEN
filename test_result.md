@@ -381,6 +381,28 @@ backend:
         -comment: "✅ ALL 8 TESTS PASSED - Comprehensive backend testing of user gender field feature. STEP 1 (Super admin login): super@porseni.id/admin123 login successful, user object does NOT leak password/password_plain/token/tokens/_id. STEP 2 (Create lomba): POST /lomba created individu lomba 'Test Gender Lomba' successfully. STEP 3 (Create panitia with gender): POST /users (super_admin) created panitia user with gender:'L' and assigned_lomba_id, response includes gender='L', status='verified', password_plain='12345678' (visible to super_admin), and does NOT leak password (hash)/token/tokens/_id. STEP 4 (GET /users shows gender): GET /users (super_admin) returned 2 users, panitia appears with gender='L', no token/tokens/hash/_id leak (password_plain is allowed for super_admin listing). STEP 5 (PUT /users gender='P'): PUT /users/:id {gender:'P'} successful, GET /users confirms gender='P' persisted correctly. STEP 6 (PUT /users gender=null): PUT /users/:id {gender:null} successful, GET /users confirms gender=null (cleared successfully). STEP 7 (Regression): (a) POST /auth/register with gender:'L' for admin_madrasah accepted without error, returns {pending:true}. (b) GET /lomba (public, no auth) returns 200 with array. (c) GET /auth/me with super_admin token returns 200 with no sensitive leak. STEP 8 (PUT /auth/profile gender): Panitia login successful with default password 12345678, PUT /auth/profile {gender:'L'} successful, GET /auth/profile confirms gender='L' persisted correctly, no password/token leak in both PUT and GET responses. User gender field working correctly: (1) POST /auth/register accepts optional gender field (L/P/null). (2) POST /users (super_admin) stores gender and returns it (with password_plain but no hash/token/_id). (3) PUT /users/:id accepts gender field and persists changes (L, P, or null). (4) PUT /auth/profile accepts gender field for self-service updates. (5) GET /users (super_admin) returns gender field with no sensitive leaks. (6) GET /auth/profile returns gender field with no sensitive leaks. NO SENSITIVE DATA LEAKS DETECTED. All backend APIs functioning correctly with proper authentication, authorization, data persistence, and validation."
 
 frontend:
+  - task: "OverlayEditor: tombol Hapus pada SETIAP elemen (name/photo/madrasah_name/dll) di Manajemen Sertifikat & ID Card"
+    implemented: true
+    working: true
+    file: "components/porseni/OverlayEditor.jsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        -working: true
+        -agent: "main"
+        -comment: "User request: tombol hapus pada setiap item sertifikat & id card = tombol Hapus untuk setiap elemen tata letak (seperti yang sudah ada pada teks kustom). CHANGE: removeField() sekarang minta konfirmasi (window.confirm) untuk elemen bawaan (bukan custom) karena tidak bisa ditambah ulang dari UI; tombol Hapus sekarang selalu tampil di panel elemen (sebelumnya hanya untuk s.custom). Berlaku di BOTH Sertifikat (juara/panitia) & ID Card (peserta/panitia) karena OverlayEditor dipakai bersama via TemplateStudio. Verified via Playwright: pilih elemen 'participant_name' -> tombol 'Hapus' tampil di panel. Frontend/canvas-only, no backend change."
+  - task: "Manajemen Juara (menu baru Super Admin): rekap juara + filter + Cetak Excel + Hapus per baris"
+    implemented: true
+    working: true
+    file: "components/porseni/SuperAdmin.jsx, components/porseni/Shell.jsx, lib/porseni/excel.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        -working: true
+        -agent: "main"
+        -comment: "NEW menu 'Manajemen Juara' (super_admin only, icon Medal, di antara Cetak Administrasi & Manajemen Sertifikat). Komponen ManajemenJuara load /juara,/lomba,/peserta; tabel rekap kolom: No, Cabang Lomba, Jenis(Individu/Kelompok), Peringkat, Jenis Kelamin(Putra/Putri), Nama Peserta/Regu, Asal Madrasah, NISN(dari peserta). Filter per cabang lomba, badge total juara, tombol Muat Ulang, tombol Cetak Excel (exportJuaraToExcel di excel.js - XLSX client-side, sheet 'Rekap Juara', urut nama lomba->peringkat->gender), dan tombol Hapus per baris (window.confirm -> DELETE /juara/:id -> reload). Endpoint DELETE /juara/:id sudah ada (no backend change). Verified via Playwright: menu tampil, tabel render (Kaligrafi/Juara 1/Putra/Ahmad Fauzi/MI Al-Hidayah/0012345678), tombol Cetak Excel ada."
   - task: "User gender + sertifikat/idcard gender element + precise overlay editor + multiline name (Textarea)"
     implemented: true
     working: "NA"

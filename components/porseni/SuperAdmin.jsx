@@ -20,13 +20,14 @@ import { StatCard, StatusBadge, PageHeader, Empty } from '@/components/porseni/s
 import TemplateStudio from '@/components/porseni/TemplateStudio'
 import { CATEGORIES, LOMBA_TYPES, GENDER_LABEL, GENDER_CERT_LABEL, GENDERS, ROLES, ROLE_LABEL, CERT_DEFAULT_FIELDS, CERT_PANITIA_FIELDS, IDCARD_PESERTA_FIELDS, IDCARD_PANITIA_FIELDS } from '@/lib/porseni/constants'
 import { api, uploadFile, fileUrl, getToken } from '@/lib/porseni/api'
-import { downloadLombaTemplate, parseLombaWorkbook, downloadUserTemplate, parseUserWorkbook, exportUsersToExcel } from '@/lib/porseni/excel'
+import { downloadLombaTemplate, parseLombaWorkbook, downloadUserTemplate, parseUserWorkbook, exportUsersToExcel, exportJuaraToExcel } from '@/lib/porseni/excel'
 
 export default function SuperAdmin({ view }) {
   if (view === 'lomba') return <ManajemenLomba />
   if (view === 'pengguna') return <ManajemenPengguna />
   if (view === 'pendaftar') return <DataPendaftar />
   if (view === 'cetak') return <CetakAdmin />
+  if (view === 'juara') return <ManajemenJuara />
   if (view === 'sertifikat') return <Sertifikat />
   if (view === 'idcard') return <IdCardManager />
   if (view === 'integrasi') return <IntegrasiGoogle />
@@ -1220,6 +1221,116 @@ function CetakAdmin() {
 }
 
 /* ---------------- SERTIFIKAT ---------------- */
+/* ---------------- MANAJEMEN JUARA (REKAP) ---------------- */
+function ManajemenJuara() {
+  const [raw, setRaw] = useState({ loading: true, juara: [], lomba: [], peserta: [] })
+  const [lombaFilter, setLombaFilter] = useState('all')
+
+  const load = async () => {
+    setRaw((r) => ({ ...r, loading: true }))
+    try {
+      const [juara, lomba, peserta] = await Promise.all([api('/juara'), api('/lomba'), api('/peserta')])
+      setRaw({ loading: false, juara: juara || [], lomba: lomba || [], peserta: peserta || [] })
+    } catch (e) { toast.error(e.message); setRaw({ loading: false, juara: [], lomba: [], peserta: [] }) }
+  }
+  useEffect(() => { load() }, [])
+
+  const lombaById = useMemo(() => Object.fromEntries((raw.lomba || []).map((l) => [l.id, l])), [raw.lomba])
+  const pesertaById = useMemo(() => Object.fromEntries((raw.peserta || []).map((p) => [p.id, p])), [raw.peserta])
+
+  const RANK_ORDER = { 'Juara 1': 1, 'Juara 2': 2, 'Juara 3': 3, 'Harapan 1': 4, 'Harapan 2': 5, 'Harapan 3': 6 }
+  const rows = useMemo(() => {
+    const list = (raw.juara || []).filter((j) => (lombaFilter === 'all' ? true : j.lomba_id === lombaFilter))
+    return [...list].sort((a, b) => {
+      const la = (lombaById[a.lomba_id]?.name || '').toLowerCase()
+      const lb = (lombaById[b.lomba_id]?.name || '').toLowerCase()
+      if (la !== lb) return la < lb ? -1 : 1
+      const ra = RANK_ORDER[a.rank] || 99, rb = RANK_ORDER[b.rank] || 99
+      if (ra !== rb) return ra - rb
+      return (a.gender || '').localeCompare(b.gender || '')
+    })
+  }, [raw.juara, lombaFilter, lombaById])
+
+  const del = async (j) => {
+    const nama = j.participant_name || j.madrasah_name || 'juara ini'
+    if (!window.confirm(`Hapus data juara "${j.rank} — ${nama}"? Tindakan ini tidak dapat dibatalkan.`)) return
+    try { await api(`/juara/${j.id}`, { method: 'DELETE' }); toast.success('Data juara dihapus'); load() }
+    catch (e) { toast.error(e.message) }
+  }
+
+  const exportExcel = () => {
+    if (!rows.length) return toast.error('Belum ada data juara untuk diekspor')
+    exportJuaraToExcel(rows, raw.lomba || [], raw.peserta || [])
+    toast.success('Rekap juara diekspor ke Excel')
+  }
+
+  return (
+    <div>
+      <PageHeader title="Manajemen Juara" desc="Rekap seluruh juara — data siap dipakai untuk sertifikat & dapat diekspor">
+        <Button variant="outline" onClick={load} disabled={raw.loading}><RefreshCw className={`h-4 w-4 mr-2 ${raw.loading ? 'animate-spin' : ''}`} />Muat Ulang</Button>
+        <Button onClick={exportExcel} disabled={raw.loading || !rows.length}><FileSpreadsheet className="h-4 w-4 mr-2" />Cetak Excel</Button>
+      </PageHeader>
+
+      <Card className="p-4 mb-4 flex flex-wrap items-center gap-3">
+        <span className="text-sm text-muted-foreground">Filter Cabang Lomba:</span>
+        <Select value={lombaFilter} onValueChange={setLombaFilter}>
+          <SelectTrigger className="w-64"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Semua Lomba</SelectItem>
+            {(raw.lomba || []).map((l) => <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>)}
+          </SelectContent>
+        </Select>
+        <Badge variant="secondary" className="ml-auto"><Medal className="h-3.5 w-3.5 mr-1" />{rows.length} Juara</Badge>
+      </Card>
+
+      <Card className="p-4">
+        {raw.loading ? <Loader2 className="h-6 w-6 animate-spin text-primary" /> : rows.length === 0 ? (
+          <Empty text="Belum ada data juara. Juara ditetapkan oleh Panitia pada menu Upload Hasil & Juara." />
+        ) : (
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-12">No</TableHead>
+                  <TableHead>Cabang Lomba</TableHead>
+                  <TableHead>Jenis</TableHead>
+                  <TableHead>Peringkat</TableHead>
+                  <TableHead>Jenis Kelamin</TableHead>
+                  <TableHead>Nama Peserta / Regu</TableHead>
+                  <TableHead>Asal Madrasah</TableHead>
+                  <TableHead>NISN</TableHead>
+                  <TableHead className="text-right">Aksi</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {rows.map((j, i) => {
+                  const l = lombaById[j.lomba_id]
+                  const p = j.peserta_id ? pesertaById[j.peserta_id] : null
+                  return (
+                    <TableRow key={j.id}>
+                      <TableCell>{i + 1}</TableCell>
+                      <TableCell className="font-medium">{l?.name || '-'}<div className="text-xs text-muted-foreground">{l?.category || ''}</div></TableCell>
+                      <TableCell><Badge variant="outline">{l?.type === 'kelompok' ? 'Kelompok' : 'Individu'}</Badge></TableCell>
+                      <TableCell><Badge className="bg-amber-100 text-amber-800 hover:bg-amber-100">{j.rank}</Badge></TableCell>
+                      <TableCell>{GENDER_CERT_LABEL[j.gender] || '-'}</TableCell>
+                      <TableCell>{j.participant_name || '-'}{j.is_group ? <span className="ml-1 text-xs text-muted-foreground">(Regu)</span> : ''}</TableCell>
+                      <TableCell>{j.madrasah_name || '-'}</TableCell>
+                      <TableCell>{(p && p.nisn) ? p.nisn : '-'}</TableCell>
+                      <TableCell className="text-right">
+                        <Button size="icon" variant="ghost" className="text-red-600 hover:text-red-700 hover:bg-red-50" onClick={() => del(j)}><Trash2 className="h-4 w-4" /></Button>
+                      </TableCell>
+                    </TableRow>
+                  )
+                })}
+              </TableBody>
+            </Table>
+          </div>
+        )}
+      </Card>
+    </div>
+  )
+}
+
 function Sertifikat() {
   const [tab, setTab] = useState('juara')
   return (
