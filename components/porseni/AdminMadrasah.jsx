@@ -12,9 +12,9 @@ import { Badge } from '@/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
-import { StatCard, StatusBadge, PageHeader, Empty } from '@/components/porseni/shared'
+import { StatCard, StatusBadge, PageHeader, Empty, SortSelect } from '@/components/porseni/shared'
 import { api, uploadFile, fileUrl } from '@/lib/porseni/api'
-import { GENDERS, GENDER_LABEL, REQ_FILES } from '@/lib/porseni/constants'
+import { GENDERS, GENDER_LABEL, REQ_FILES, sortPeserta } from '@/lib/porseni/constants'
 import { downloadPesertaTemplate, parsePesertaWorkbook, downloadTeamTemplate, parseTeamWorkbook } from '@/lib/porseni/excel'
 
 export default function AdminMadrasah({ view, user }) {
@@ -552,6 +552,8 @@ function EditBiodataDialog({ peserta, lomba, open, onOpenChange, onSaved }) {
 function DaftarPeserta({ peserta, lomba, loading, onChange }) {
   const [dlg, setDlg] = useState({ open: false, peserta: null })
   const [editDlg, setEditDlg] = useState({ open: false, peserta: null })
+  const [sortBy, setSortBy] = useState('nomor')
+  const rows = sortPeserta(peserta, sortBy)
   const del = async (id) => {
     if (!confirm('Hapus peserta ini?')) return
     try { await api(`/peserta/${id}`, { method: 'DELETE' }); toast.success('Peserta dihapus'); onChange() }
@@ -559,7 +561,9 @@ function DaftarPeserta({ peserta, lomba, loading, onChange }) {
   }
   return (
     <div>
-      <PageHeader title="Daftar Peserta Saya" desc="Lengkapi berkas persyaratan agar peserta diteruskan ke Panitia" />
+      <PageHeader title="Daftar Peserta Saya" desc="Lengkapi berkas persyaratan agar peserta diteruskan ke Panitia">
+        {peserta.length > 0 && <SortSelect value={sortBy} onChange={setSortBy} />}
+      </PageHeader>
       <Card>
         {loading ? <div className="p-8"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div> : peserta.length === 0 ? <Empty text="Belum ada peserta terdaftar." /> : (
           <Table>
@@ -577,7 +581,7 @@ function DaftarPeserta({ peserta, lomba, loading, onChange }) {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {peserta.map((p) => (
+              {rows.map((p) => (
                 <TableRow key={p.id}>
                   <TableCell className="font-mono">{p.nomor_peserta}</TableCell>
                   <TableCell className="font-medium">{p.participant_name}</TableCell>

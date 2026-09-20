@@ -7,9 +7,9 @@ import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { StatCard, StatusBadge, PageHeader, Empty } from '@/components/porseni/shared'
+import { StatCard, StatusBadge, PageHeader, Empty, SortSelect } from '@/components/porseni/shared'
 import TemplateStudio from '@/components/porseni/TemplateStudio'
-import { RANKS, GENDERS, IDCARD_PESERTA_FIELDS } from '@/lib/porseni/constants'
+import { RANKS, GENDERS, IDCARD_PESERTA_FIELDS, sortPeserta as sortPesertaBy } from '@/lib/porseni/constants'
 import { api, uploadFile, fileUrl } from '@/lib/porseni/api'
 
 export default function Panitia({ view, user }) {
@@ -95,13 +95,14 @@ function TeamNomorCell({ members, onSave }) {
 function DaftarPeserta({ lomba, peserta, loading, onChange }) {
   const [expanded, setExpanded] = useState({})
   const [gender, setGender] = useState('all')
+  const [sortBy, setSortBy] = useState('nomor')
   const setNomor = async (id, nomor_peserta) => {
     try { await api(`/peserta/${id}`, { method: 'PUT', body: { nomor_peserta } }); toast.success('Nomor urut tampil diperbarui'); onChange() }
     catch (e) { toast.error(e.message) }
   }
   const sortPeserta = (arr) => [...(arr || [])].sort((a, b) => (Number(a.nomor_peserta) || 0) - (Number(b.nomor_peserta) || 0) || String(a.nomor_peserta).localeCompare(String(b.nomor_peserta)))
   const filteredPeserta = (peserta || []).filter((p) => gender === 'all' ? true : (p.gender || '') === gender)
-  const sorted = sortPeserta(filteredPeserta)
+  const sorted = sortPesertaBy(filteredPeserta, sortBy)
   const isGroup = lomba?.type === 'kelompok'
 
   const GenderFilter = (
@@ -254,6 +255,7 @@ function DaftarPeserta({ lomba, peserta, loading, onChange }) {
     <div>
       <PageHeader title="Daftar Peserta" desc={lomba ? `${lomba.name} — isi kolom No. Urut Tampil untuk mengatur urutan cetak (verifikasi peserta oleh Super Admin)` : ''} />
       {GenderFilter}
+      <div className="mb-3"><SortSelect value={sortBy} onChange={setSortBy} /></div>
       <Card>
         {loading ? <div className="p-8"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div> : sorted.length === 0 ? <Empty /> : (
           <Table>
@@ -319,6 +321,7 @@ function IdCardCetak({ lomba, peserta, loading }) {
 function Cetak({ lomba, peserta, criteria, kopSurat }) {
   const [mode, setMode] = useState('absensi')
   const [gender, setGender] = useState('all')
+  const [sortBy, setSortBy] = useState('nomor')
   const doPrint = (m) => { setMode(m); setTimeout(() => window.print(), 150) }
   const crit = criteria.length ? criteria : ['Kriteria 1', 'Kriteria 2']
 
@@ -329,9 +332,10 @@ function Cetak({ lomba, peserta, criteria, kopSurat }) {
       : <span className="peserta-photo-empty">Foto</span>
   }
 
-  const rows = peserta
-    .filter((p) => gender === 'all' ? true : p.gender === gender)
-    .sort((a, b) => (Number(a.nomor_peserta) || 0) - (Number(b.nomor_peserta) || 0) || String(a.nomor_peserta).localeCompare(String(b.nomor_peserta)))
+  const rows = sortPesertaBy(
+    peserta.filter((p) => gender === 'all' ? true : p.gender === gender),
+    sortBy,
+  )
   const genderLabel = gender === 'L' ? ' (Putra)' : gender === 'P' ? ' (Putri)' : ''
 
   const Header = (
@@ -403,6 +407,7 @@ function Cetak({ lomba, peserta, criteria, kopSurat }) {
               </SelectContent>
             </Select>
           </div>
+          <SortSelect value={sortBy} onChange={setSortBy} />
           <span className="text-xs text-muted-foreground">{rows.length} peserta</span>
         </div>
         <div className="flex gap-2 mb-4">

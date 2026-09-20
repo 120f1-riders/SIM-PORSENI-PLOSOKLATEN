@@ -2,6 +2,22 @@
 
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { PESERTA_SORT_OPTIONS } from '@/lib/porseni/constants'
+
+export function SortSelect({ value, onChange, className = 'w-44' }) {
+  return (
+    <div className="flex items-center gap-2">
+      <span className="text-sm text-muted-foreground">Urutkan:</span>
+      <Select value={value} onValueChange={onChange}>
+        <SelectTrigger className={className}><SelectValue /></SelectTrigger>
+        <SelectContent>
+          {PESERTA_SORT_OPTIONS.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+        </SelectContent>
+      </Select>
+    </div>
+  )
+}
 
 export function StatCard({ icon: Icon, label, value, hint, color = 'text-primary' }) {
   return (

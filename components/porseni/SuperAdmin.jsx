@@ -16,9 +16,9 @@ import { Badge } from '@/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
-import { StatCard, StatusBadge, PageHeader, Empty } from '@/components/porseni/shared'
+import { StatCard, StatusBadge, PageHeader, Empty, SortSelect } from '@/components/porseni/shared'
 import TemplateStudio from '@/components/porseni/TemplateStudio'
-import { CATEGORIES, LOMBA_TYPES, GENDER_LABEL, GENDER_CERT_LABEL, GENDERS, ROLES, ROLE_LABEL, CERT_DEFAULT_FIELDS, CERT_PANITIA_FIELDS, IDCARD_PESERTA_FIELDS, IDCARD_PANITIA_FIELDS } from '@/lib/porseni/constants'
+import { CATEGORIES, LOMBA_TYPES, GENDER_LABEL, GENDER_CERT_LABEL, GENDERS, ROLES, ROLE_LABEL, CERT_DEFAULT_FIELDS, CERT_PANITIA_FIELDS, IDCARD_PESERTA_FIELDS, IDCARD_PANITIA_FIELDS, sortPeserta } from '@/lib/porseni/constants'
 import { api, uploadFile, fileUrl, getToken } from '@/lib/porseni/api'
 import { downloadLombaTemplate, parseLombaWorkbook, downloadUserTemplate, parseUserWorkbook, exportUsersToExcel, exportJuaraToExcel } from '@/lib/porseni/excel'
 
@@ -911,6 +911,7 @@ function DataPendaftar() {
   const [lombaFilter, setLombaFilter] = useState('all')
   const [genderFilter, setGenderFilter] = useState('all')
   const [madrasahFilter, setMadrasahFilter] = useState('all')
+  const [sortBy, setSortBy] = useState('nomor')
   const [kopSurat, setKopSurat] = useState(null)
   const [editDlg, setEditDlg] = useState({ open: false, peserta: null })
 
@@ -933,10 +934,13 @@ function DataPendaftar() {
     catch (e) { toast.error(e.message) }
   }
 
-  const rows = peserta
-    .filter((p) => lombaFilter === 'all' ? true : p.lomba_id === lombaFilter)
-    .filter((p) => genderFilter === 'all' ? true : p.gender === genderFilter)
-    .filter((p) => madrasahFilter === 'all' ? true : (p.madrasah_name || '') === madrasahFilter)
+  const rows = sortPeserta(
+    peserta
+      .filter((p) => lombaFilter === 'all' ? true : p.lomba_id === lombaFilter)
+      .filter((p) => genderFilter === 'all' ? true : p.gender === genderFilter)
+      .filter((p) => madrasahFilter === 'all' ? true : (p.madrasah_name || '') === madrasahFilter),
+    sortBy,
+  )
 
   const madrasahOptions = Array.from(new Set(peserta.map((p) => (p.madrasah_name || '').trim()).filter(Boolean))).sort((a, b) => a.localeCompare(b))
 
@@ -1022,6 +1026,7 @@ function DataPendaftar() {
               </SelectContent>
             </Select>
           </div>
+          <SortSelect value={sortBy} onChange={setSortBy} />
           <span className="text-xs text-muted-foreground">{rows.length} peserta</span>
         </Card>
         <Card>
@@ -1091,6 +1096,7 @@ function CetakAdmin() {
   const [mode, setMode] = useState('absensi')
   const [lombaFilter, setLombaFilter] = useState('')
   const [gender, setGender] = useState('all')
+  const [sortBy, setSortBy] = useState('nomor')
 
   useEffect(() => {
     (async () => {
@@ -1107,11 +1113,13 @@ function CetakAdmin() {
   const crit = (selectedLomba?.judging_criteria || []).map((c) => (typeof c === 'string' ? c : c.name))
   const critList = crit.length ? crit : ['Kriteria 1', 'Kriteria 2']
 
-  const rows = peserta
-    .filter((p) => (lombaFilter ? p.lomba_id === lombaFilter : true))
-    .filter((p) => p.status === 'verified')
-    .filter((p) => (gender === 'all' ? true : p.gender === gender))
-    .sort((a, b) => String(a.nomor_peserta).localeCompare(String(b.nomor_peserta)))
+  const rows = sortPeserta(
+    peserta
+      .filter((p) => (lombaFilter ? p.lomba_id === lombaFilter : true))
+      .filter((p) => p.status === 'verified')
+      .filter((p) => (gender === 'all' ? true : p.gender === gender)),
+    sortBy,
+  )
 
   const doPrint = (m) => { setMode(m); setTimeout(() => window.print(), 150) }
   const genderLabel = gender === 'L' ? ' (Putra)' : gender === 'P' ? ' (Putri)' : ''
@@ -1203,6 +1211,7 @@ function CetakAdmin() {
                   </SelectContent>
                 </Select>
               </div>
+              <SortSelect value={sortBy} onChange={setSortBy} />
               <span className="text-xs text-muted-foreground">{rows.length} peserta</span>
             </Card>
             <div className="flex gap-2 mb-4">
