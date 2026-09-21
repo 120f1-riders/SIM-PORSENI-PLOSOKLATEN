@@ -18,7 +18,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { StatCard, StatusBadge, PageHeader, Empty, SortSelect } from '@/components/porseni/shared'
 import TemplateStudio from '@/components/porseni/TemplateStudio'
-import { CATEGORIES, LOMBA_TYPES, GENDER_LABEL, GENDER_CERT_LABEL, GENDERS, ROLES, ROLE_LABEL, CERT_DEFAULT_FIELDS, CERT_PANITIA_FIELDS, IDCARD_PESERTA_FIELDS, IDCARD_PANITIA_FIELDS, sortPeserta } from '@/lib/porseni/constants'
+import { CATEGORIES, LOMBA_TYPES, GENDER_LABEL, GENDER_CERT_LABEL, GENDERS, ROLES, ROLE_LABEL, CERT_DEFAULT_FIELDS, CERT_PANITIA_FIELDS, IDCARD_PESERTA_FIELDS, IDCARD_PANITIA_FIELDS, sortPeserta, rankDisplay } from '@/lib/porseni/constants'
 import { api, uploadFile, fileUrl, getToken } from '@/lib/porseni/api'
 import { downloadLombaTemplate, parseLombaWorkbook, downloadUserTemplate, parseUserWorkbook, exportUsersToExcel, exportJuaraToExcel } from '@/lib/porseni/excel'
 
@@ -185,7 +185,7 @@ function Dashboard() {
 
   // Klasemen perolehan medali per Asal Madrasah
   // Juara 1 = Emas (5 poin), Juara 2 = Perak (3 poin), Juara 3 = Perunggu (1 poin). Harapan = 0.
-  const RANK_MEDAL = { 'Juara 1': { key: 'gold', poin: 5 }, 'Juara 2': { key: 'silver', poin: 3 }, 'Juara 3': { key: 'bronze', poin: 1 } }
+  const RANK_MEDAL = { 'Juara 1': { key: 'gold', poin: 5 }, 'Juara 2': { key: 'silver', poin: 3 }, 'Juara 3': { key: 'bronze', poin: 1 }, 'Juara 3 Bersama': { key: 'bronze', poin: 1 } }
   const medalMap = {}
   data.juara.forEach((j) => {
     const m = RANK_MEDAL[j.rank]
@@ -1247,7 +1247,7 @@ function ManajemenJuara() {
   const lombaById = useMemo(() => Object.fromEntries((raw.lomba || []).map((l) => [l.id, l])), [raw.lomba])
   const pesertaById = useMemo(() => Object.fromEntries((raw.peserta || []).map((p) => [p.id, p])), [raw.peserta])
 
-  const RANK_ORDER = { 'Juara 1': 1, 'Juara 2': 2, 'Juara 3': 3, 'Harapan 1': 4, 'Harapan 2': 5, 'Harapan 3': 6 }
+  const RANK_ORDER = { 'Juara 1': 1, 'Juara 2': 2, 'Juara 3': 3, 'Juara 3 Bersama': 3.5, 'Harapan 1': 4, 'Harapan 2': 5, 'Harapan 3': 6 }
   const rows = useMemo(() => {
     const list = (raw.juara || []).filter((j) => (lombaFilter === 'all' ? true : j.lomba_id === lombaFilter))
     return [...list].sort((a, b) => {
@@ -1262,7 +1262,7 @@ function ManajemenJuara() {
 
   const del = async (j) => {
     const nama = j.participant_name || j.madrasah_name || 'juara ini'
-    if (!window.confirm(`Hapus data juara "${j.rank} — ${nama}"? Tindakan ini tidak dapat dibatalkan.`)) return
+    if (!window.confirm(`Hapus data juara "${rankDisplay(j.rank)} — ${nama}"? Tindakan ini tidak dapat dibatalkan.`)) return
     try { await api(`/juara/${j.id}`, { method: 'DELETE' }); toast.success('Data juara dihapus'); load() }
     catch (e) { toast.error(e.message) }
   }
@@ -1320,7 +1320,7 @@ function ManajemenJuara() {
                       <TableCell>{i + 1}</TableCell>
                       <TableCell className="font-medium">{l?.name || '-'}<div className="text-xs text-muted-foreground">{l?.category || ''}</div></TableCell>
                       <TableCell><Badge variant="outline">{l?.type === 'kelompok' ? 'Kelompok' : 'Individu'}</Badge></TableCell>
-                      <TableCell><Badge className="bg-amber-100 text-amber-800 hover:bg-amber-100">{j.rank}</Badge></TableCell>
+                      <TableCell><Badge className="bg-amber-100 text-amber-800 hover:bg-amber-100">{rankDisplay(j.rank)}</Badge></TableCell>
                       <TableCell>{GENDER_CERT_LABEL[j.gender] || '-'}</TableCell>
                       <TableCell>{j.participant_name || '-'}{j.is_group ? <span className="ml-1 text-xs text-muted-foreground">(Regu)</span> : ''}</TableCell>
                       <TableCell>{j.madrasah_name || '-'}</TableCell>
@@ -1394,12 +1394,12 @@ function SertifikatJuara() {
   for (const j of juaraFiltered) {
     const lombaName = lm[j.lomba_id] || ''
     const gl = gLabel(j.gender)
-    const rankLabel = gl ? `${j.rank} ${gl}` : j.rank
+    const rankLabel = gl ? `${rankDisplay(j.rank)} ${gl}` : rankDisplay(j.rank)
     if (j.is_group) {
       if (groupMode === 'regu') {
         targets.push({
           label: `${rankLabel} - ${j.madrasah_name} (Regu)`,
-          filename: `Sertifikat_${j.rank}_${gl}_${(j.madrasah_name || 'regu').replace(/\s+/g, '_')}.png`,
+          filename: `Sertifikat_${rankDisplay(j.rank)}_${gl}_${(j.madrasah_name || 'regu').replace(/\s+/g, '_')}.png`,
           values: { participant_name: j.madrasah_name, madrasah_name: j.madrasah_name, lomba_name: lombaName, rank: rankLabel, gender_label: gc(j.gender), photo: null },
         })
       } else {

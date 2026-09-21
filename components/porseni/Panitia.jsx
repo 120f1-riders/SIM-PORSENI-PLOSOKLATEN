@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { StatCard, StatusBadge, PageHeader, Empty, SortSelect } from '@/components/porseni/shared'
 import TemplateStudio from '@/components/porseni/TemplateStudio'
-import { RANKS, GENDERS, IDCARD_PESERTA_FIELDS, sortPeserta as sortPesertaBy } from '@/lib/porseni/constants'
+import { RANKS, GENDERS, IDCARD_PESERTA_FIELDS, sortPeserta as sortPesertaBy, ranksForLomba, rankDisplay } from '@/lib/porseni/constants'
 import { api, uploadFile, fileUrl } from '@/lib/porseni/api'
 
 export default function Panitia({ view, user }) {
@@ -444,7 +444,7 @@ function Hasil({ lomba, peserta, juara, hasil, onChange }) {
   const assign = async (rank, value) => {
     try {
       const body = isGroup ? { lomba_id: lomba.id, rank, gender, madrasah_name: value, is_group: true } : { lomba_id: lomba.id, rank, gender, peserta_id: value }
-      await api('/juara', { method: 'POST', body }); toast.success(`${rank} (${gender === 'L' ? 'Putra' : 'Putri'}) ditetapkan`); onChange()
+      await api('/juara', { method: 'POST', body }); toast.success(`${rankDisplay(rank)} (${gender === 'L' ? 'Putra' : 'Putri'}) ditetapkan`); onChange()
     }
     catch (e) { toast.error(e.message) }
   }
@@ -490,11 +490,11 @@ function Hasil({ lomba, peserta, juara, hasil, onChange }) {
             ))}
           </div>
           <div className="space-y-3">
-            {RANKS.map((rank) => {
+            {ranksForLomba(lomba).map(({ key: rank, label }) => {
               const current = juara.find((j) => j.rank === rank && (j.gender || '') === gender)
               return (
                 <div key={rank} className="flex items-center gap-2">
-                  <div className="w-24 text-sm font-medium">{rank}</div>
+                  <div className="w-24 text-sm font-medium">{label}</div>
                   {isGroup ? (
                     <Select value={current?.madrasah_name || ''} onValueChange={(v) => assign(rank, v)}>
                       <SelectTrigger className="flex-1"><SelectValue placeholder="Pilih madrasah" /></SelectTrigger>
